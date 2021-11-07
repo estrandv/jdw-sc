@@ -1,0 +1,17 @@
+# JackDAW Supercollider
+- SCLang and SCSynth process management
+	- OSC library: ROSC has good examples 
+	- Async/Thread listener for server callback 
+- Structs
+	- All incoming messages (or can we do them as maps..?) 
+		- Would it be worth it to do some kind of polymorphism? 
+		- Like... with common ZMQMessage behaviour like handle and contents? 
+	- Outgoing OSC
+		- Any wrappers needed, or should we just construct in-function and send?
+	- RunningNote impl 
+- Templates
+	- Could probably outline as structs with to_string() 
+	- NRT callback? 
+- Cleanup thread
+- ZMQ incoming read thread 
+- Buffer Data 
