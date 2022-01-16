@@ -1,4 +1,6 @@
 mod supercollider;
+mod zeromq;
+mod model;
 
 use subprocess::{Exec, Redirection, Popen, PopenConfig};
 use std::process::exit;
@@ -6,6 +8,8 @@ use std::sync::{Mutex, Arc};
 use crate::supercollider::{Supercollider, NodeManager};
 use rosc::{OscType, OscMessage};
 use std::cell::RefCell;
+use crate::zeromq::ZMQSubscriber;
+use crate::model::{ProscNoteCreateMessage, ProscNoteModifyMessage};
 
 fn main() {
     println!("Hello, world!");
@@ -31,14 +35,52 @@ fn main() {
 
     let sc_client = NodeManager::new(arc.clone());
 
+    // Send hello ping
     sc_client.s_new_timed_gate(
         "default",
         vec![OscType::String("freq".to_string()), OscType::Float(240.0)],
         0.1
     );
 
+    let sc_loop_client = Arc::new(Mutex::new(sc_client));
+
+    let subscriber = ZMQSubscriber::new();
+
+    // Read incoming messages from ZMQ queue in loop
     loop {
-        // stay alive
+        println!("DEBUG: Loop reset");
+        let msg = subscriber.recv();
+        println!("DEBUG: Message inc {}", &msg.msg_type);
+
+        // TODO: Wrong kind of message; we want the one with built-in time
+        if msg.msg_type == String::from("JDW.ADD.NOTE") {
+
+            println!("INcoming note on");
+            let payload: ProscNoteCreateMessage = serde_json::from_str(&msg.json_contents).unwrap();
+
+            sc_loop_client.lock().unwrap()
+                .s_new(
+                    &payload.external_id,
+                    "default", //&payload.target,
+                    payload.get_arg_vec()
+                );
+
+
+        } else if msg.msg_type == String::from("JDW.NSET.NOTE") {
+            let payload: ProscNoteModifyMessage = serde_json::from_str(&msg.json_contents).unwrap();
+
+            sc_loop_client.lock().unwrap()
+                .note_mod(
+                    &payload.external_id,
+                    payload.get_arg_vec()
+                );
+
+
+        } else if msg.msg_type == String::from("JDW.RMV.NOTE") {
+
+        } else {
+            panic!("Unknown message type: {}", msg.msg_type);
+        }
     }
 
 }
