@@ -2,6 +2,7 @@ mod supercollider;
 mod zeromq;
 mod model;
 mod synth_templates;
+mod samples;
 
 use subprocess::{Exec, Redirection, Popen, PopenConfig};
 use std::process::exit;
