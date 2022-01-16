@@ -1,6 +1,7 @@
 mod supercollider;
 mod zeromq;
 mod model;
+mod synth_templates;
 
 use subprocess::{Exec, Redirection, Popen, PopenConfig};
 use std::process::exit;
@@ -35,6 +36,17 @@ fn main() {
 
     let sc_client = NodeManager::new(arc.clone());
 
+    let synth_defs = synth_templates::read_all("add");
+
+    for def in synth_defs {
+        arc.lock().unwrap().send_to_client(
+            OscMessage {
+                addr: "/read_scd".to_string(),
+                args:  vec![OscType::String(def)]
+            }
+        )
+    }
+
     // Send hello ping
     sc_client.s_new_timed_gate(
         "default",
@@ -52,7 +64,6 @@ fn main() {
         let msg = subscriber.recv();
         println!("DEBUG: Message inc {}", &msg.msg_type);
 
-        // TODO: Wrong kind of message; we want the one with built-in time
         if msg.msg_type == String::from("JDW.ADD.NOTE") {
 
             println!("INcoming note on");
@@ -61,7 +72,7 @@ fn main() {
             sc_loop_client.lock().unwrap()
                 .s_new(
                     &payload.external_id,
-                    "default", //&payload.target,
+                    &payload.target,
                     payload.get_arg_vec()
                 );
 

@@ -30,11 +30,25 @@ s.waitForBoot({
 			fn.readAllString.interpret;
 			fn.close;
 
-			o.sendMsg("/script_read", "file_path");
+			o.sendMsg("/customscript_done", "1");
 
 		},
 		'/customscript'
 	);
+
+	/*
+    		Function for flat out reading plain scd strings
+
+    		MSG: read_scd, <scd string>
+    */
+    OSCFunc(
+        {
+            arg msg, time, addr, port;
+            msg[1].asString.interpret;
+            o.sendMsg("/read_scd_done", "1");
+        },
+        '/read_scd'
+    );
 
 	//"Ready!".postln;
 	o.sendMsg("/init", "ok");
