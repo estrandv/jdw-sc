@@ -3,18 +3,50 @@ use std::fs;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
-struct Sample {
+pub struct Sample {
     pub file_name: String, // e.g. "hihat88.wav"
     pub buffer_nr: i32,
 }
 
-struct SamplePack {
+impl Sample {
+
+    // Typical "read into buffer" script to be run on server boot
+    pub fn to_buffer_load_scd(&self, dir: &str) -> String {
+        format!(
+            "Buffer.read(s, File.getcwd +/+ \"{}\", 0, -1, bufnum: {}); \n",
+            dir.to_string() + "/" + &self.file_name.to_string(),
+            self.buffer_nr
+        )
+    }
+
+    // Buffer load as-osc, suitable for loading into the NRT server
+    pub fn to_nrt_scd_row(&self, dir: &str) -> String {
+        format!(
+            "[0.0, (Buffer.new(server, 44100 * 8.0, 2, bufnum: {})).allocReadMsg(File.getcwd +/+ \"{}\")]",
+            dir.to_string() + &self.file_name.to_string(),
+            self.buffer_nr
+        )
+    }
+}
+
+pub struct SamplePack {
     pub dir_path: PathBuf, // e.g. "wav/example"
     pub samples: Vec<Sample>,
     pub samples_ordered: HashMap<String, Vec<Sample>> // samples by category
 }
 
-struct Counter {
+impl SamplePack {
+    pub fn to_buffer_load_scd(&self) -> String {
+        let mut script = "".to_string();
+        let dir = self.dir_path.to_str().unwrap();
+        for sample in &self.samples {
+            script += &sample.to_buffer_load_scd(dir)
+        }
+        script.to_string()
+    }
+}
+
+pub struct Counter {
     value: i32
 }
 
@@ -60,11 +92,7 @@ impl SampleCategory<'_> {
     }
 }
 
-struct SampleDict {
-    pub sample_packs: Vec<SamplePack>,
-    pub counter: Counter
-}
-
+// Assign to a predetermined "category" that we can then use to call samples by type
 fn get_sample_category(filename: &str) -> String {
 
     // TODO: Static
@@ -103,16 +131,28 @@ fn get_sample_category(filename: &str) -> String {
 
     match found {
         Some(cat) => cat.key.to_string(),
-        None => "mi".to_string()
+        None => "mi".to_string() // "misc"
     }
 
 }
 
+pub struct SampleDict {
+    pub sample_packs: Vec<SamplePack>,
+    pub counter: Counter
+}
+
+
 impl SampleDict {
 
+    pub fn to_buffer_load_scd(&self) -> String {
+        let vector = self.sample_packs.iter().map(|pack| pack.to_buffer_load_scd()).collect::<Vec<String>>();
+        vector.join("\n") + "\no.sendMsg(\"/buffers_loaded\", \"ok\");"
+    }
+
+    // TODO: Result return to avoid IO errors crashing everything
     pub fn from_dir(dir: &Path) -> SampleDict {
 
-        let mut counter = Counter {value: 0};
+        let mut counter = Counter {value: -1};
 
         let mut packs: Vec<SamplePack> = Vec::new();
 

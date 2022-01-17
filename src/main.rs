@@ -12,6 +12,8 @@ use rosc::{OscType, OscMessage};
 use std::cell::RefCell;
 use crate::zeromq::ZMQSubscriber;
 use crate::model::{ProscNoteCreateMessage, ProscNoteModifyMessage};
+use std::path::Path;
+use std::time::Duration;
 
 fn main() {
     println!("Hello, world!");
@@ -37,6 +39,7 @@ fn main() {
 
     let sc_client = NodeManager::new(arc.clone());
 
+    // Load synths and buffers
     let synth_defs = synth_templates::read_all("add");
 
     for def in synth_defs {
@@ -47,6 +50,32 @@ fn main() {
             }
         )
     }
+
+    let buffer_data = samples::SampleDict::from_dir(Path::new("sample_packs"));
+    let buffer_string = buffer_data.to_buffer_load_scd();
+
+    if !buffer_string.is_empty() {
+
+        arc.lock().unwrap().send_to_client(
+            OscMessage {
+                addr: "/read_scd".to_string(),
+                args:  vec![OscType::String(buffer_string)]
+            }
+        );
+
+        // Not needed for hello ping but neat until we have proper wait times for everything // TODO: Remove
+        arc.lock().unwrap().wait_for("/buffers_loaded", vec![OscType::String("ok".to_string())], thread_abort.clone());
+
+        // Do the same for buffer //TODO: real method
+        sc_client.s_new_timed_gate(
+            "sampler",
+            vec![],
+            0.1
+        );
+
+    }
+
+    ///////////////////////////
 
     // Send hello ping
     sc_client.s_new_timed_gate(
@@ -61,9 +90,7 @@ fn main() {
 
     // Read incoming messages from ZMQ queue in loop
     loop {
-        println!("DEBUG: Loop reset");
         let msg = subscriber.recv();
-        println!("DEBUG: Message inc {}", &msg.msg_type);
 
         if msg.msg_type == String::from("JDW.ADD.NOTE") {
 

@@ -30,7 +30,7 @@ s.waitForBoot({
 			fn.readAllString.interpret;
 			fn.close;
 
-			o.sendMsg("/customscript_done", "1");
+			o.sendMsg("/customscript_done", "ok");
 
 		},
 		'/customscript'
@@ -45,7 +45,7 @@ s.waitForBoot({
         {
             arg msg, time, addr, port;
             msg[1].asString.interpret;
-            o.sendMsg("/read_scd_done", "1");
+            o.sendMsg("/read_scd_done", "ok");
         },
         '/read_scd'
     );

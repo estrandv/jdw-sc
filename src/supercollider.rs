@@ -266,6 +266,8 @@ impl Supercollider {
 
         let mut buf = [0u8; rosc::decoder::MTU];
 
+        println!(">> Waiting for message with name {} and args {:?} ...", message_name, args);
+
         loop {
 
             // TODO: Does not appear to work when hitting ctrl+c on server boot
@@ -274,31 +276,30 @@ impl Supercollider {
                 break;
             }
 
-            println!("Waiting for message with name {} and args {:?}", message_name, args);
             match self.osc_socket.recv_from(&mut buf) {
                 Ok((size, addr)) => {
                     //println!("Received packet with size {} from: {}", size, addr);
                     let packet = rosc::decoder::decode(&buf[..size]).unwrap();
                     match packet {
                         OscPacket::Message(msg) => {
-                            println!("OSC address: {}", msg.addr);
+                            //println!("OSC address: {}", msg.addr);
                             //println!("OSC arguments: {:?}", msg.args);
 
                             if  msg.addr == message_name && args == msg.args {
-                                println!("Awaited message received!");
+                                println!(">> Awaited message received! Continuing ...");
                                 break;
                             } else {
-                                println!(
+/*                                println!(
                                     "Name does not match {} != {} or {:?} != {:?}",
                                          msg.addr,
                                          message_name,
                                          msg.args,
                                          args
-                                );
+                                );*/
                             }
                         }
                         OscPacket::Bundle(bundle) => {
-                            println!("OSC Bundle: {:?}", bundle);
+                            //println!("OSC Bundle: {:?}", bundle);
                         }
                     }
                 }
@@ -307,7 +308,7 @@ impl Supercollider {
                     break;
                 }
             }
-            std::thread::sleep(Duration::from_millis(100));
+            std::thread::sleep(Duration::from_millis(10));
         }
 
     }
