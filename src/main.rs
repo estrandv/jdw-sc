@@ -22,18 +22,14 @@ fn main() {
     let arc = Arc::new(Mutex::new(handler));
     let arc_in_ctrlc = arc.clone();
 
-    let thread_abort = Arc::new(Mutex::new(RefCell::new(false)));
-    let ctrlc_thread_abort = thread_abort.clone();
-
     ctrlc::set_handler(move || {
-        ctrlc_thread_abort.lock().unwrap().replace(true);
         println!("Thread abort requested");
         arc_in_ctrlc.lock().unwrap().terminate();
         exit(0);
     }).expect("Error setting Ctrl-C handler");
 
     // NOTE: this also prevents, ctrl+c due to the lock
-    arc.lock().unwrap().wait_for("/init", vec![OscType::String("ok".to_string())], thread_abort.clone());
+    arc.lock().unwrap().wait_for("/init", vec![OscType::String("ok".to_string())], Duration::from_secs(10));
 
     println!("Server online!");
 
@@ -64,7 +60,7 @@ fn main() {
         );
 
         // Not needed for hello ping but neat until we have proper wait times for everything // TODO: Remove
-        arc.lock().unwrap().wait_for("/buffers_loaded", vec![OscType::String("ok".to_string())], thread_abort.clone());
+        arc.lock().unwrap().wait_for("/buffers_loaded", vec![OscType::String("ok".to_string())], Duration::from_secs(10));
 
         // Do the same for buffer //TODO: real method
         sc_client.s_new_timed_gate(

@@ -4,7 +4,7 @@ use std::str::FromStr;
 use rosc::{OscPacket, OscTime, OscType, OscMessage, encoder};
 use std::thread;
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::sync::{Mutex, Arc};
 use std::cell::RefCell;
 
@@ -229,6 +229,10 @@ impl Supercollider {
             Err(_) => panic!("Error binding sclang address"),
         };
 
+        // Note this sneaky configuration. Mostly needed so that wait_for method does not stay on forever ...
+        // Seems to also enable ctrl+c interrupt for some reason.
+        incoming_socket.set_read_timeout(Option::Some(Duration::from_secs(30)));
+
         Supercollider {
             sclang_process: process,
             osc_socket: incoming_socket,
@@ -262,19 +266,15 @@ impl Supercollider {
         self.osc_socket.send_to(&msg_buf, self.sclang_out_addr).unwrap();
     }
 
-    pub fn wait_for(&self, message_name: &str, args: Vec<OscType>, abort_check: Arc<Mutex<RefCell<bool>>>) {
+    pub fn wait_for(&self, message_name: &str, args: Vec<OscType>, timeout: Duration) {
+
+        let start_time = Instant::now();
 
         let mut buf = [0u8; rosc::decoder::MTU];
 
         println!(">> Waiting for message with name {} and args {:?} ...", message_name, args);
 
         loop {
-
-            // TODO: Does not appear to work when hitting ctrl+c on server boot
-            if abort_check.lock().unwrap().clone().into_inner() == true {
-                println!("wait_for cancelled by manual abort");
-                break;
-            }
 
             match self.osc_socket.recv_from(&mut buf) {
                 Ok((size, addr)) => {
@@ -304,10 +304,20 @@ impl Supercollider {
                     }
                 }
                 Err(e) => {
-                    println!("Error receiving from socket: {}", e);
+                    println!(">> Error receiving from socket: {}", e);
                     break;
                 }
             }
+
+            let elapsed = start_time.elapsed();
+
+            println!("Elapsed: {:?}, timeout: {:?}", elapsed.clone(), timeout.clone());
+
+            if elapsed > timeout {
+                println!(">> Timed out waiting for {}", message_name);
+                break;
+            }
+
             std::thread::sleep(Duration::from_millis(10));
         }
 
