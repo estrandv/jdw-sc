@@ -7,6 +7,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use std::sync::{Mutex, Arc};
 use std::cell::RefCell;
+use crate::samples::SampleDict;
 
 // TODO: KIll twin in model.rs
 #[derive(Debug, Clone)]
@@ -176,6 +177,19 @@ impl NodeManager {
             self.sc_handle.lock().unwrap().send_to_server(running.unwrap().to_note_off());
             self.remove_running(external_id);
         }
+    }
+
+    // TODO: Never cleaning can result in overflow - consider gate time
+    pub fn sample_trigger(&self, args: Vec<OscType>) {
+
+        let new_note = self.create_note(
+            "sampler_dummy",
+            "sampler",
+            args
+        );
+
+        self.sc_handle.lock().unwrap().send_to_server(new_note.to_s_new());
+
     }
 
     pub fn s_new_timed_gate(&self, synth_name: &str, args: Vec<OscType>, gate_time_sec: f32) {

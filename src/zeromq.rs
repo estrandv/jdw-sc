@@ -15,6 +15,8 @@ impl ZMQSubscriber {
         socket.set_subscribe("JDW.SEQ.QUEUE".as_bytes());
         socket.set_subscribe("JDW.NSET.NOTE".as_bytes());
         socket.set_subscribe("JDW.ADD.NOTE".as_bytes());
+        socket.set_subscribe("JDW.PLAY.NOTE".as_bytes());
+        socket.set_subscribe("JDW.PLAY.SAMPLE".as_bytes());
 
         ZMQSubscriber {
             socket

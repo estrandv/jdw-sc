@@ -5,6 +5,8 @@ var osc; // var defs
 // Simple saw wave
 osc = Saw.ar(freq: freq, mul: amp, add: 0.0);
 
+// Note that there is no gate/env, so this synth cannot be turned off the traditional way ...
+
 // Mono to stereo
 osc = Mix(osc) * 0.5;
 

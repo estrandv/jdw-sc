@@ -36,6 +36,11 @@ pub struct SamplePack {
 }
 
 impl SamplePack {
+
+    pub fn get_file_name(&self) -> &str {
+        self.dir_path.file_name().unwrap().to_str().unwrap()
+    }
+
     pub fn to_buffer_load_scd(&self) -> String {
         let mut script = "".to_string();
         let dir = self.dir_path.to_str().unwrap();
@@ -43,6 +48,25 @@ impl SamplePack {
             script += &sample.to_buffer_load_scd(dir)
         }
         script.to_string()
+    }
+
+    pub fn get_buffer_number(&self, number: i32, category: Option<String>) -> i32 {
+
+        if category.is_some() {
+
+            let cat = category.unwrap().to_string();
+            let sub_pack = self.samples_ordered.get(&cat);
+
+            if sub_pack.is_some() {
+                let index = (number % (sub_pack.unwrap().len() - 1) as i32 ) as usize;
+                let samples = sub_pack.unwrap().clone();
+                return samples.get(index).unwrap().buffer_nr;
+            }
+
+        }
+
+        let index = (number % (self.samples.len() - 1) as i32 ) as usize;
+        return self.samples.get(index).unwrap().buffer_nr;
     }
 }
 
@@ -137,15 +161,28 @@ fn get_sample_category(filename: &str) -> String {
 }
 
 pub struct SampleDict {
-    pub sample_packs: Vec<SamplePack>,
+    pub sample_packs: HashMap<String, SamplePack>,
     pub counter: Counter
 }
 
 
 impl SampleDict {
 
+    pub fn get_buffer_number(&self, pack: &str, number: i32, category: Option<String>) -> Option<i32> {
+        let pack= self.sample_packs.get(pack);
+
+        match pack {
+            Some(sp) => {
+                Option::Some(sp.get_buffer_number(number, category))
+            },
+            None => Option::None
+        }
+
+    }
+
     pub fn to_buffer_load_scd(&self) -> String {
-        let vector = self.sample_packs.iter().map(|pack| pack.to_buffer_load_scd()).collect::<Vec<String>>();
+        let vec = self.sample_packs.values().clone().collect::<Vec<&SamplePack>>();
+        let vector = vec.iter().map(|pack| pack.to_buffer_load_scd()).collect::<Vec<String>>();
         vector.join("\n") + "\no.sendMsg(\"/buffers_loaded\", \"ok\");"
     }
 
@@ -154,7 +191,7 @@ impl SampleDict {
 
         let mut counter = Counter {value: -1};
 
-        let mut packs: Vec<SamplePack> = Vec::new();
+        let mut packs: HashMap<String, SamplePack> = HashMap::new();
 
         for entry in fs::read_dir(dir).unwrap() {
             let path = entry.unwrap().path();
@@ -188,12 +225,13 @@ impl SampleDict {
 
                 }
 
-                packs.push(SamplePack{
+                let pack_name = path.file_name().unwrap().to_str().unwrap().to_string();
+
+                packs.insert(pack_name, SamplePack{
                     dir_path: path,
                     samples,
                     samples_ordered: sample_sorter.sample_map
-                })
-
+                });
 
             }
         }
