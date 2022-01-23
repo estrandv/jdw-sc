@@ -10,10 +10,11 @@ use std::sync::{Mutex, Arc};
 use crate::supercollider::{Supercollider, NodeManager};
 use rosc::{OscType, OscMessage};
 use std::cell::RefCell;
-use crate::zeromq::ZMQSubscriber;
-use crate::model::{ProscNoteCreateMessage, ProscNoteModifyMessage, JdwPlayNoteMsg, JdwPlaySampleMsg};
+use crate::zeromq::{ZMQSubscriber, into_message, ZMQMsg};
+use crate::model::{ProscNoteCreateMessage, ProscNoteModifyMessage, JdwPlayNoteMsg, JdwPlaySampleMsg, JdwSequencerBatchMsg};
 use std::path::Path;
 use std::time::Duration;
+use crate::samples::SampleDict;
 
 fn main() {
     println!("Hello, world!");
@@ -83,61 +84,116 @@ fn main() {
 
     let subscriber = ZMQSubscriber::new();
 
+    let main_loop = MainLoop {
+        sc_loop_client,
+        buffer_handle
+    };
+
     // Read incoming messages from ZMQ queue in loop
     loop {
-        let msg = subscriber.recv();
+        let recv_msg = subscriber.recv();
 
-        if msg.msg_type == String::from("JDW.ADD.NOTE") {
+        main_loop.process_msg(recv_msg);
 
-            // Add note with no explicit end time. Typically requires gate mod to turn off.
+    }
 
-            println!("INcoming note on");
-            let payload: ProscNoteCreateMessage = serde_json::from_str(&msg.json_contents).unwrap();
+    struct MainLoop {
+        sc_loop_client: Arc<Mutex<NodeManager>>,
+        buffer_handle: Arc<Mutex<SampleDict>>,
+    }
 
-            sc_loop_client.lock().unwrap()
-                .s_new(
-                    &payload.external_id,
-                    &payload.target,
-                    payload.get_arg_vec()
-                );
+    impl MainLoop {
+
+        // Place message process in struct to allow recursive calls (batch) with dependencies
+        fn process_msg(
+            &self,
+            msg: ZMQMsg
+        ) {
+            if msg.msg_type == String::from("JDW.ADD.NOTE") {
+
+                // Add note with no explicit end time. Typically requires gate mod to turn off.
+
+                println!("INcoming note on");
+                let payload: ProscNoteCreateMessage = serde_json::from_str(&msg.json_contents).unwrap();
+
+                match payload.get_gate_time() {
+                    Some(time) => {
+                        self.sc_loop_client.lock().unwrap()
+                            .s_new_timed_gate(
+                                &payload.target,
+                                payload.get_arg_vec(),
+                                time
+                            );
+                    },
+                    None => {
+                        self.sc_loop_client.lock().unwrap()
+                            .s_new(
+                                &payload.external_id,
+                                &payload.target,
+                                payload.get_arg_vec()
+                            );
+                    }
+                }
+
+            } else if msg.msg_type == String::from("JDW.NSET.NOTE") {
+
+                // Any changing of sc args, including the "note off" gate arg
+
+                let payload: ProscNoteModifyMessage = serde_json::from_str(&msg.json_contents).unwrap();
+
+                self.sc_loop_client.lock().unwrap()
+                    .note_mod(
+                        &payload.external_id,
+                        payload.get_arg_vec()
+                    );
 
 
-        } else if msg.msg_type == String::from("JDW.NSET.NOTE") {
+            } else if msg.msg_type == String::from("JDW.PLAY.SAMPLE") {
+                let payload: JdwPlaySampleMsg = serde_json::from_str(&msg.json_contents).unwrap();
 
-            // Any changing of sc args, including the "note off" gate arg
+                self.sc_loop_client.lock().unwrap()
+                    .sample_trigger(
+                        payload.get_arg_vec(self.buffer_handle.clone())
+                    );
 
-            let payload: ProscNoteModifyMessage = serde_json::from_str(&msg.json_contents).unwrap();
+            } else if msg.msg_type == String::from("JDW.SEQ.BATCH") {
 
-            sc_loop_client.lock().unwrap()
-                .note_mod(
-                    &payload.external_id,
-                    payload.get_arg_vec()
-                );
+                /*
+                    TODO: Decoding the batch
+                    - Each sequencer tick has a message that is a jdw message in plainstring: "JDW.BLA::1991::{"args": ...}"
+                    - Batch wraps a list of these as the json: JDW.BATCH::["blabla", "bla"]
+                    - As such, decoding JDW.BATCH is mainly about taking the json part in as Vec<String> and then running
+                        message decodes from there
+                 */
 
+                println!("{:?}", &msg);
 
-        } else if msg.msg_type == String::from("JDW.PLAY.SAMPLE") {
-            let payload: JdwPlaySampleMsg = serde_json::from_str(&msg.json_contents).unwrap();
+                let vector_payload: Vec<String> = serde_json::from_str(&msg.json_contents).unwrap();
 
-            sc_loop_client.lock().unwrap()
-                .sample_trigger(
-                    payload.get_arg_vec(buffer_handle.clone())
-                );
+                for batch_msg in vector_payload {
+                    let dec_batch_msg = into_message(&batch_msg);
+                    // Note recursion
+                    self.process_msg(dec_batch_msg);
+                }
 
+            } else if msg.msg_type == String::from("JDW.PLAY.NOTE") {
 
-        } else if msg.msg_type == String::from("JDW.PLAY.NOTE") {
+                // Auto-gated, typical "sequencer" note play
 
-            // Auto-gated, typical "sequencer" note play
-
-            let payload: JdwPlayNoteMsg = serde_json::from_str(&msg.json_contents).unwrap();
-            sc_loop_client.lock().unwrap()
-                .s_new_timed_gate(
-                    &payload.target,
-                    payload.get_arg_vec(),
-                    payload.get_gate_time()
-                );
-        } else {
-            panic!("Unknown message type: {}", msg.msg_type);
+                let payload: JdwPlayNoteMsg = serde_json::from_str(&msg.json_contents).unwrap();
+                self.sc_loop_client.lock().unwrap()
+                    .s_new_timed_gate(
+                        &payload.target,
+                        payload.get_arg_vec(),
+                        payload.get_gate_time()
+                    );
+            } else {
+                println!("Unknown message type: {}", msg.msg_type);
+            }
         }
     }
+
+
+
 
 }

@@ -24,6 +24,11 @@ pub trait ZeroMQSendable {
     fn export(&self) -> String;
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JdwSequencerBatchMsg {
+    pub json: Vec<String>
+}
+
 /*
     Note that there is basically no useful difference between this and note on atm.
     Considerations need to be made: should missing "sus" arg be the only divider
@@ -89,6 +94,13 @@ pub struct ProscNoteCreateMessage {
 impl ProscNoteCreateMessage {
     pub fn get_arg_vec(&self) -> Vec<OscType> {
         map_args(&self.args)
+    }
+
+    pub fn get_gate_time(&self) -> Option<f32> {
+        match self.args.get("sus") {
+            Some(time) => Option::Some(*time),
+            None => None
+        }
     }
 }
 
