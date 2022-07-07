@@ -1,27 +1,12 @@
-# JackDAW Supercollider
-- SCLang and SCSynth process management
-	- OSC library: ROSC has good examples 
-	- Async/Thread listener for server callback 
-- Structs
-	- All incoming messages (or can we do them as maps..?) 
-		- Would it be worth it to do some kind of polymorphism? 
-		- Like... with common ZMQMessage behaviour like handle and contents? 
-	- Outgoing OSC
-		- Any wrappers needed, or should we just construct in-function and send?
-	- RunningNote impl 
-- Templates
-	- Could probably outline as structs with to_string() 
-	- NRT callback? 
-- Cleanup thread
-- ZMQ incoming read thread 
-- Buffer Data 
-
-### FUture plans
-- Everything as OSC? 
-	- https://www.music.mcgill.ca/~gary/306/week9/osc.html
-	- OSC UDP is FAST 
-	- "address" usage can replace the wonky JDW.NOTE.PLAY:: syntax of current 
-	- Through some kind of bundle stacking we can achieve the sequencer requirements of 
-		<tag, time, contained_message> through som kind of 
-		bundle:<msg:<tag, time>, other_msg:<...>>
-		- Only issue is pattern matching / filtering
+# Supercollider Wrapper
+This is a wrapper application to manage a running instance of Supercollider server
+	and sclang by forwarding and interpreting OSC messages. 
+The main purposes of the project are as follows:
+	1. Manage the lifecycle of and OSC-communication with the Supercollider and sclang processes
+	2. Provide streamlined helper functions to simplify usage of more obtuse supercollider OSC functionality
+		- e.g. s_new with timed sustain, NRT recording, sample playing
+	3. Simplify the usage of Supercollider as a regular music instrument through:
+		- A streamlined way to define sample packs and play them using OSC
+		- A streamlined way to define synths for easy playing of single notes via OSC
+		- A carefully structured and commented open source codebase
+	4. Integrate Supercollider with the JackDAW microservice project via jdw-router

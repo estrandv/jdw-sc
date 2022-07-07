@@ -1,6 +1,8 @@
 use std::thread;
 use zmq::Socket;
 
+// TODO: Deprecated. Remove.
+
 pub fn into_message(raw_str: &str) -> ZMQMsg {
 
     let str = raw_str.to_string();

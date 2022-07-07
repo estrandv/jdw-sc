@@ -13,7 +13,7 @@ s.waitForBoot({
 	("Client Port: " + NetAddr.langPort).postln;
 
 	/*
-		Function for calling scd scripts via osc during runtime.
+		Custom function for calling scd scripts via osc during runtime.
 
 		MSG: customScript, <scd_file_path>
 	*/
@@ -37,7 +37,7 @@ s.waitForBoot({
 	);
 
 	/*
-    		Function for flat out reading plain scd strings
+    		Custom function for flat out reading plain scd strings
 
     		MSG: read_scd, <scd string>
     */
@@ -51,6 +51,10 @@ s.waitForBoot({
     );
 
 	//"Ready!".postln;
+
+	/*
+	    Custom message sent on startup completion to let the wrapper know that all custom logic is ready
+	*/
 	o.sendMsg("/init", "ok");
 });
 

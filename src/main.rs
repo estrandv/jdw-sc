@@ -3,6 +3,7 @@ mod zeromq;
 mod model;
 mod synth_templates;
 mod samples;
+mod osc_model;
 
 use subprocess::{Exec, Redirection, Popen, PopenConfig};
 use std::process::exit;
@@ -17,28 +18,39 @@ use std::time::Duration;
 use crate::samples::SampleDict;
 
 fn main() {
-    println!("Hello, world!");
 
+    /*
+        Prepare thread handler for the main supercollider instance
+     */
     let handler = Supercollider::new();
     let arc = Arc::new(Mutex::new(handler));
     let arc_in_ctrlc = arc.clone();
 
+    // Terminate supercollider on ctrl+c
     ctrlc::set_handler(move || {
         println!("Thread abort requested");
         arc_in_ctrlc.lock().unwrap().terminate();
         exit(0);
     }).expect("Error setting Ctrl-C handler");
 
-    // NOTE: this also prevents, ctrl+c due to the lock
-    arc.lock().unwrap().wait_for("/init", vec![OscType::String("ok".to_string())], Duration::from_secs(10));
+    /*
+        Wait for the custom /init message from the server (see start_server.scd).
+        TODO: Does the application crash on timeout? Some kind of handling/termination is needed.
+     */
+    arc.lock().unwrap()
+        .wait_for("/init", vec![OscType::String("ok".to_string())], Duration::from_secs(10));
 
     println!("Server online!");
 
     let sc_client = NodeManager::new(arc.clone());
 
-    // Load synths and buffers
+    /*
+        Use the synth definitions from the synths dir to ready custom scd messages.
+        The messages then create these synthdefs on the server using the sclang client.
+     */
     let synth_defs = synth_templates::read_all("add");
 
+    // See start_server.scd for the /read_scd definition
     for def in synth_defs {
         arc.lock().unwrap().send_to_client(
             OscMessage {
@@ -48,10 +60,12 @@ fn main() {
         )
     }
 
+    /*
+        Prepare sample players. All samples are read into buffers via read_scd on the sclang client.
+        The sample dict struct keeps track of which buffer index belongs to which sample pack.
+     */
     let buffer_data = samples::SampleDict::from_dir(Path::new("sample_packs"));
-
     let buffer_handle = Arc::new(Mutex::new(buffer_data));
-
     let buffer_string = buffer_handle.clone().lock().unwrap().to_buffer_load_scd();
 
     if !buffer_string.is_empty() {
@@ -63,26 +77,34 @@ fn main() {
             }
         );
 
-        // Not needed for hello ping but neat until we have proper wait times for everything // TODO: Remove
+        // Message is added to the end of the buffer load scd to signify a completed load call.
+        // TODO: Does this trigger? Is it accurate? There was a note previously to remove it. Also error handling...
         arc.lock().unwrap().wait_for("/buffers_loaded", vec![OscType::String("ok".to_string())], Duration::from_secs(10));
-
-        // Do the same for buffer
-        sc_client.sample_trigger(vec![]);
 
     }
 
     ///////////////////////////
 
-    // Send hello ping
+    /*
+        Play some welcoming sounds.
+     */
+
+    // Play a default sample to notify the user that samples are live.
+    // Note how an empty arg-array will simply play the first loaded buffer.
+    sc_client.sample_trigger(vec![]);
+
     sc_client.s_new_timed_gate(
         "default",
         vec![OscType::String("freq".to_string()), OscType::Float(240.0)],
         0.1
     );
 
+
+    // Create a thread handle for the main loop.
     let sc_loop_client = Arc::new(Mutex::new(sc_client));
 
-    let subscriber = ZMQSubscriber::new();
+    // TODO: Replace with OSC
+    let zmq_subscriber = ZMQSubscriber::new();
 
     let main_loop = MainLoop {
         sc_loop_client,
@@ -91,10 +113,8 @@ fn main() {
 
     // Read incoming messages from ZMQ queue in loop
     loop {
-        let recv_msg = subscriber.recv();
-
+        let recv_msg = zmq_subscriber.recv();
         main_loop.process_msg(recv_msg);
-
     }
 
     struct MainLoop {
@@ -104,7 +124,9 @@ fn main() {
 
     impl MainLoop {
 
-        // Place message process in struct to allow recursive calls (batch) with dependencies
+        // TODO: Main reason for struct is to allow recursive calls that the old BATCH method of message grouping required.
+        // A similar handle might be wanted for osc bundles but I'm unsure if it would save any time in UDP.
+        // Note: We're talking about sequencer sending a hundred tracks all at once, e.g. at loop start for 0.0 notes.
         fn process_msg(
             &self,
             msg: ZMQMsg
