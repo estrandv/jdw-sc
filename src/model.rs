@@ -13,13 +13,6 @@ fn map_args(args: &HashMap<String, f32>) -> Vec<OscType> {
     vec
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RunningNote {
-    pub synth: String,
-    pub external_id: String,
-    pub tone: i32
-}
-
 pub trait ZeroMQSendable {
     fn export(&self) -> String;
 }

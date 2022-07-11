@@ -4,17 +4,20 @@ mod model;
 mod synth_templates;
 mod samples;
 mod osc_model;
+mod osc_client;
 
 use subprocess::{Exec, Redirection, Popen, PopenConfig};
 use std::process::exit;
 use std::sync::{Mutex, Arc};
 use crate::supercollider::{Supercollider, NodeManager};
-use rosc::{OscType, OscMessage};
+use rosc::{OscType, OscMessage, OscPacket};
 use std::cell::RefCell;
 use crate::zeromq::{ZMQSubscriber, into_message, ZMQMsg};
 use crate::model::{ProscNoteCreateMessage, ProscNoteModifyMessage, JdwPlayNoteMsg, JdwPlaySampleMsg, JdwSequencerBatchMsg};
 use std::path::Path;
 use std::time::Duration;
+use crate::osc_client::OSCPoller;
+use crate::osc_model::SNewTimedGateMessage;
 use crate::samples::SampleDict;
 
 fn main() {
@@ -105,6 +108,7 @@ fn main() {
 
     // TODO: Replace with OSC
     let zmq_subscriber = ZMQSubscriber::new();
+    let mut osc_poller = OSCPoller::new();
 
     let main_loop = MainLoop {
         sc_loop_client,
@@ -113,8 +117,20 @@ fn main() {
 
     // Read incoming messages from ZMQ queue in loop
     loop {
-        let recv_msg = zmq_subscriber.recv();
-        main_loop.process_msg(recv_msg);
+
+        // TODO: Unless all operations are lightning-fast there might be a need for a poller/processor pattern
+        // E.g. one thread polls and fills a buffer, the other eats through said buffer
+        // THis might also be relevant for the router
+        match osc_poller.poll() {
+            Ok(packet) => {
+                main_loop.process_osc(packet);
+            }
+            Err(e_str) => {
+                println!("{}", &e_str);
+            }
+        };
+
+        //let recv_msg = zmq_subscriber.recv();
     }
 
     struct MainLoop {
@@ -123,6 +139,49 @@ fn main() {
     }
 
     impl MainLoop {
+
+        // TODO: Starting a side-implementation for easier switch to OSC
+        fn process_osc(
+            &self,
+            packet: OscPacket
+        ) {
+            match packet {
+                OscPacket::Message(msg) => {
+
+                    println!("OSC address: {}", msg.addr);
+                    println!("OSC arguments: {:?}", msg.args);
+
+                    // TODO: Each known address will have an osc_model object it can be parsed into
+
+                    if msg.addr == "/s_new_timed_gate" {
+                        match SNewTimedGateMessage::new(msg) {
+                            Ok(processed_message) => {
+                                self.sc_loop_client.lock().unwrap()
+                                    .s_new_timed_gate(
+                                        &processed_message.synth_name,
+                                        processed_message.args,
+                                        processed_message.gate_time
+                                    );
+                            },
+                            Err(err_msg) => {
+                                println!("Error processing incoming osc: {}", &err_msg);
+                            }
+                        }
+                    } else {
+                        // TODO: ... each unknown address will be forwarded straight to sc
+                    }
+
+                    // TODO: Might there be client messages that we want to send from outside?
+
+                }
+                OscPacket::Bundle(bundle) => {
+
+                    // TODO: All incoming bundles will require a bundle_info message to be processed
+
+                    println!("OSC Bundle: {:?}", bundle);
+                }
+            }
+        }
 
         // TODO: Main reason for struct is to allow recursive calls that the old BATCH method of message grouping required.
         // A similar handle might be wanted for osc bundles but I'm unsure if it would save any time in UDP.

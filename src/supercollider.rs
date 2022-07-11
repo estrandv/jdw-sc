@@ -9,7 +9,8 @@ use std::sync::{Mutex, Arc};
 use std::cell::RefCell;
 use crate::samples::SampleDict;
 
-// TODO: KIll twin in model.rs
+// Representation of a note/"synth" that has been started in supercollider with s_new but not
+// yet removed with gate=0 or similar measure.
 #[derive(Debug, Clone)]
 struct RunningNote {
     pub synth: String,
@@ -101,6 +102,9 @@ impl NodeManager {
     }
 
     fn create_note(&self, external_id: &str, synth_name: &str, args: Vec<OscType>) -> RunningNote {
+
+        // TODO: Creating same external id should naturally wipe the old one - how about retain?
+
         let current_id = self.current_node_id.clone().into_inner();
         self.current_node_id.replace(current_id + 1);
 
@@ -206,6 +210,12 @@ impl NodeManager {
         thread::spawn(move || {
             thread::sleep(Duration::from_secs_f32(gate_time_sec));
             handle_clone.lock().unwrap().send_to_server(new_note.to_note_off());
+            // TODO: Bit of a lifetime mess here - we actually want to call remove_running or even note_off
+            //  at this point but moving mut self is an issue...
+            // If running notes member is converted to refcell we can cheat the &mut self of remove_running
+            // Also note that we should technically remove it after release time rather than immediately on gate
+            // ... which kinda also means that "rel" arg should be elevated to a message-level arg... but
+            // that is shaky territory.
         });
     }
 }
@@ -293,7 +303,8 @@ impl Supercollider {
             match self.osc_socket.recv_from(&mut buf) {
                 Ok((size, addr)) => {
                     //println!("Received packet with size {} from: {}", size, addr);
-                    let packet = rosc::decoder::decode(&buf[..size]).unwrap();
+                    let (_, packet) = rosc::decoder::decode_udp(&buf[..size]).unwrap();
+
                     match packet {
                         OscPacket::Message(msg) => {
                             //println!("OSC address: {}", msg.addr);
