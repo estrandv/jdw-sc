@@ -33,25 +33,22 @@ impl SNewTimedGateMessage {
             let synth_name = msg.args
                 .get(0)
                 .map_or(None, |some| some.clone().string())
-                .map_or(Err("synth_name not found"), |s| Ok(s))?;
+                .map_or(Err("synth name string not found as first arg"), |s| Ok(s))?;
 
             let external_id = msg.args
                 .get(1)
                 .map_or(None, |some| some.clone().string())
-                .map_or(Err("external_id not found"), |s| Ok(s))?;
+                .map_or(Err("external id string not found as second arg"), |s| Ok(s))?;
 
             let gate_time = msg.args
                 .get(2)
                 .map_or(None, |some| some.clone().float())
-                .map_or(Err("gate_time not found"), |s| Ok(s))?;
+                .map_or(Err("gate time not found as third arg"), |s| Ok(s))?;
 
-            // TODO: Not sure about start index of slice here
-            let named_args = if msg.args.len() > 3 {(&msg.args[2..].to_vec()).clone()} else {vec![]};
+            let named_args = if msg.args.len() > 3 {(&msg.args[3..].to_vec()).clone()} else {vec![]};
 
             // TODO: Ensure even number of named args and that they conform to str,double pattern
 
-            // TODO: What about the actual OSC we then send to server? Construct now or later? I guess
-            //  it isn't a big difference since it will be sent immediately on receive either way...
             Ok(SNewTimedGateMessage {
                 synth_name,
                 external_id,

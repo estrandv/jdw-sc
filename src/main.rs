@@ -115,6 +115,8 @@ fn main() {
         buffer_handle
     };
 
+    println!("Startup completed, polling for messages ...");
+
     // Read incoming messages from ZMQ queue in loop
     loop {
 
@@ -148,8 +150,7 @@ fn main() {
             match packet {
                 OscPacket::Message(msg) => {
 
-                    println!("OSC address: {}", msg.addr);
-                    println!("OSC arguments: {:?}", msg.args);
+                    println!(">> Received OSC message for function/address: {} with args {:?}", msg.addr, msg.args);
 
                     // TODO: Each known address will have an osc_model object it can be parsed into
 

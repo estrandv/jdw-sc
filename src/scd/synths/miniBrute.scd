@@ -1,5 +1,5 @@
 SynthDef.new("miniBrute",
-{|amp=1, sus=1, pan=0, freq=440, hpf=200, ace=0.6, fcx=4, prt=0, bus=0,
+{|amp=1, sus=1, pan=0, freq=340, hpf=200, ace=0.6, fcx=4, prt=0, bus=0,
 attT=0.02, decT=0.0, susL=1.0, relT=0.0, gate=1, lfoS=0.0, lfoD=0.0, gain=1.0, fx=0.06|
 var osc, snd, env, gen, filterenv, filter, lfosc, snd2, saw1, saw2, saw3;
 
