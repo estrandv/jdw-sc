@@ -1,5 +1,4 @@
 mod supercollider;
-mod zeromq;
 mod model;
 mod synth_templates;
 mod samples;
@@ -12,7 +11,6 @@ use std::sync::{Mutex, Arc};
 use crate::supercollider::{Supercollider, NodeManager};
 use rosc::{OscType, OscMessage, OscPacket};
 use std::cell::RefCell;
-use crate::zeromq::{ZMQSubscriber, into_message, ZMQMsg};
 use crate::model::{ProscNoteCreateMessage, ProscNoteModifyMessage, JdwPlayNoteMsg, JdwPlaySampleMsg, JdwSequencerBatchMsg};
 use std::path::Path;
 use std::time::Duration;
@@ -107,8 +105,6 @@ fn main() {
     // Create a thread handle for the main loop.
     let sc_loop_client = Arc::new(Mutex::new(sc_client));
 
-    // TODO: Replace with OSC
-    let zmq_subscriber = ZMQSubscriber::new();
     let mut osc_poller = OSCPoller::new();
 
     let main_loop = MainLoop {
@@ -118,7 +114,6 @@ fn main() {
 
     println!("Startup completed, polling for messages ...");
 
-    // Read incoming messages from ZMQ queue in loop
     loop {
 
         // TODO: Unless all operations are lightning-fast there might be a need for a poller/processor pattern
@@ -133,7 +128,6 @@ fn main() {
             }
         };
 
-        //let recv_msg = zmq_subscriber.recv();
     }
 
     struct MainLoop {
@@ -152,8 +146,6 @@ fn main() {
                 OscPacket::Message(msg) => {
 
                     println!(">> Received OSC message for function/address: {} with args {:?}", msg.addr, msg.args);
-
-                    // TODO: Each known address will have an osc_model object it can be parsed into
 
                     if msg.addr == "/note_on_timed" {
                         match NoteOnTimedMessage::new(msg) {
@@ -218,6 +210,9 @@ fn main() {
                         }
                     }
                     else {
+
+                        self.sc_loop_client.lock().unwrap()
+
                         // TODO: ... each unknown address will be forwarded straight to sc
                     }
 
@@ -230,99 +225,6 @@ fn main() {
 
                     println!("OSC Bundle: {:?}", bundle);
                 }
-            }
-        }
-
-        // TODO: Main reason for struct is to allow recursive calls that the old BATCH method of message grouping required.
-        // A similar handle might be wanted for osc bundles but I'm unsure if it would save any time in UDP.
-        // Note: We're talking about sequencer sending a hundred tracks all at once, e.g. at loop start for 0.0 notes.
-        fn process_msg(
-            &self,
-            msg: ZMQMsg
-        ) {
-            if msg.msg_type == String::from("JDW.ADD.NOTE") {
-
-                // Add note with no explicit end time. Typically requires gate mod to turn off.
-
-                println!("INcoming note on");
-                let payload: ProscNoteCreateMessage = serde_json::from_str(&msg.json_contents).unwrap();
-
-                match payload.get_gate_time() {
-                    Some(time) => {
-                        self.sc_loop_client.lock().unwrap()
-                            .note_on_timed(
-                                "dummy_note", // Will be removed soon...
-                                &payload.target,
-                                payload.get_arg_vec(),
-                                time
-                            );
-                    },
-                    None => {
-                        self.sc_loop_client.lock().unwrap()
-                            .note_on(
-                                &payload.external_id,
-                                &payload.target,
-                                payload.get_arg_vec()
-                            );
-                    }
-                }
-
-            } else if msg.msg_type == String::from("JDW.NSET.NOTE") {
-
-                // Any changing of sc args, including the "note off" gate arg
-
-                let payload: ProscNoteModifyMessage = serde_json::from_str(&msg.json_contents).unwrap();
-
-                self.sc_loop_client.lock().unwrap()
-                    .note_mod(
-                        &payload.external_id,
-                        payload.get_arg_vec()
-                    );
-
-
-            } else if msg.msg_type == String::from("JDW.PLAY.SAMPLE") {
-                let payload: JdwPlaySampleMsg = serde_json::from_str(&msg.json_contents).unwrap();
-
-                self.sc_loop_client.lock().unwrap()
-                    .sample_trigger(
-                        // Note how get_arg_vec constructs different args using sample dict data
-                        payload.get_arg_vec(self.buffer_handle.clone())
-                    );
-
-            } else if msg.msg_type == String::from("JDW.SEQ.BATCH") {
-
-                /*
-                    TODO: Decoding the batch
-                    - Each sequencer tick has a message that is a jdw message in plainstring: "JDW.BLA::1991::{"args": ...}"
-                    - Batch wraps a list of these as the json: JDW.BATCH::["blabla", "bla"]
-                    - As such, decoding JDW.BATCH is mainly about taking the json part in as Vec<String> and then running
-                        message decodes from there
-                 */
-
-                println!("{:?}", &msg);
-
-                let vector_payload: Vec<String> = serde_json::from_str(&msg.json_contents).unwrap();
-
-                for batch_msg in vector_payload {
-                    let dec_batch_msg = into_message(&batch_msg);
-                    // Note recursion
-                    self.process_msg(dec_batch_msg);
-                }
-
-            } else if msg.msg_type == String::from("JDW.PLAY.NOTE") {
-
-                // Auto-gated, typical "sequencer" note play
-
-                let payload: JdwPlayNoteMsg = serde_json::from_str(&msg.json_contents).unwrap();
-                self.sc_loop_client.lock().unwrap()
-                    .note_on_timed(
-                        "dummy_note", // Will be removed soon ...
-                        &payload.target,
-                        payload.get_arg_vec(),
-                        payload.get_gate_time()
-                    );
-            } else {
-                println!("Unknown message type: {}", msg.msg_type);
             }
         }
     }
