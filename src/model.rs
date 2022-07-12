@@ -56,7 +56,33 @@ pub struct JdwPlaySampleMsg {
     pub args: HashMap<String, f32>,
 }
 
+// TODO: Move to good location. Also it's a bit overkill.
+pub fn add_sample_buf_arg(
+    samples: Arc<Mutex<SampleDict>>,
+    sample_pack: String,
+    index: i32,
+    message_args: Vec<OscType>,
+    category: Option<String>,
+) -> Vec<OscType> {
+
+    // Note: Important to document this since it a large part of the "hack" for
+    //  working with samples: the index/category combo is converted into a "bus" named arg for scd
+
+    let mut base_args = message_args.clone();
+
+    let buf_nr = samples.lock().unwrap().get_buffer_number(&sample_pack, index, category)
+        .unwrap_or(0); // Should probably be some kind of error, but for now default to base buf
+
+    // TODO: Buf might already be in it. Might be good to wipe it.
+    base_args.push(OscType::String("buf".to_string()));
+    base_args.push(OscType::Int(buf_nr));
+
+    base_args
+
+}
+
 impl JdwPlaySampleMsg {
+    // TODO: Not happy with this, will make new method for osc above
     pub fn get_arg_vec(&self, samples: Arc<Mutex<SampleDict>>) -> Vec<OscType> {
 
         let mut base_args = map_args(&self.args);

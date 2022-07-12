@@ -6,8 +6,47 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::error::Error;
+use std::fmt::format;
 use rosc::{OscError, OscMessage, OscType};
-use serde::de::Unexpected::Option;
+use std::option::Option;
+
+/*
+    Adding some convenience functions for OscMessage args
+ */
+trait OscArgHandler {
+    fn expect_args(&self, amount: usize) -> Result<String, String>;
+    fn get_string_at(&self, index: usize, name: &str, ) -> Result<String, String>;
+    fn get_float_at(&self, index: usize, name: &str, ) -> Result<f32, String>;
+}
+
+impl OscArgHandler for OscMessage {
+
+    fn expect_args(&self, amount: usize) -> Result<String, String> {
+
+        if self.args.len() < (amount + 1) {
+            return Err(format!("Message did not contain the {} first required args.", amount));
+        }
+
+        Ok("Ok".to_string())
+    }
+
+    fn get_string_at(&self, index: usize, name: &str, ) -> Result<String, String> {
+        let err_msg = format!("{} string not found as {}th arg", name, index);
+        self.args
+            .get(index)
+            .map_or(None, |some| some.clone().string())
+            .map_or(Err(err_msg), |s| Ok(s))
+    }
+
+    fn get_float_at(&self, index: usize, name: &str, ) -> Result<f32, String> {
+        let err_msg = format!("{} float not found as {}th arg", name, index);
+        self.args
+            .get(index)
+            .map_or(None, |some| some.clone().float())
+            .map_or(Err(err_msg), |s| Ok(s))
+    }
+
+}
 
 // Re-implementation of JdwPlayNoteMsg
 // Initial structure below: (Note that we might want to expose other s_new args eventually)
@@ -25,25 +64,11 @@ impl SNewTimedGateMessage {
             Err(format!("Attempted to parse {} as s_new_timed_gate", msg.addr))
         } else {
 
-            if msg.args.len() < 3 {
-                return Err("Message did not contain the 2 first required args.".to_string());
-            }
+            msg.expect_args(2)?;
 
-            // get index -> cast as string -> map option to result -> assign or throw
-            let synth_name = msg.args
-                .get(0)
-                .map_or(None, |some| some.clone().string())
-                .map_or(Err("synth name string not found as first arg"), |s| Ok(s))?;
-
-            let external_id = msg.args
-                .get(1)
-                .map_or(None, |some| some.clone().string())
-                .map_or(Err("external id string not found as second arg"), |s| Ok(s))?;
-
-            let gate_time = msg.args
-                .get(2)
-                .map_or(None, |some| some.clone().float())
-                .map_or(Err("gate time not found as third arg"), |s| Ok(s))?;
+            let synth_name = msg.get_string_at(0, "synth name")?;
+            let external_id = msg.get_string_at(1, "external id")?;
+            let gate_time = msg.get_float_at(2, "gate time")?;
 
             let named_args = if msg.args.len() > 3 {(&msg.args[3..].to_vec()).clone()} else {vec![]};
 
@@ -69,7 +94,7 @@ impl SNewTimedGateMessage {
 pub struct SNewTaggedMessage {
     pub synth_name: String, // The synth upon which to play the note.
     pub external_id: String, // Identifier for note to allow later modification.
-    pub args: HashMap<String, f32>, // Named args such as "bus" or "rel"
+    pub args: Vec<OscType>, // Named args such as "bus" or "rel"
 }
 
 // ProscNoteModifyMessage
@@ -78,5 +103,20 @@ pub struct SNewTaggedMessage {
 // NOTE: Note-off doesn't need its own message; it is simply an n_set with gate=0
 pub struct NSetTaggedMessage {
     pub external_id: String, // External id of note to change args for
-    pub args: HashMap<String, f32>, // Args to set
+    pub args: Vec<OscType>, // Args to set (same as in SNewTimedGateMessage)
+}
+
+// Example below of args in order with "" as category (= Empty)
+// ["/play_sample", "example", 2, "", "arg1", 0.2, "arg2", 0.4, ...]
+pub struct PlaySampleMessage {
+    pub sample_pack: String, // The parent dir of the sample file
+    pub index: i32, // Sample number - either as plain order in dir or in a given category
+    pub category: Option<String>, // TODO: Arbitrary string codes... is there a better way?
+    pub args: Vec<OscType>, // Args to set (same as in SNewTimedGateMessage)
+}
+
+impl PlaySampleMessage {
+    pub fn new(message: OscMessage) -> Result<PlaySampleMessage, String> {
+        Err("unimpl".to_string())
+    }
 }

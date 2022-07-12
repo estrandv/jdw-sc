@@ -8,10 +8,6 @@ use std::str::FromStr;
 // NOTE: Naming is perhaps suboptimal. This mainly concerns receiving external OSC messages.
 // Different OSC handling is also used in the supercollider.rs functions.
 
-// TODO: Use https://github.com/klingtnet/rosc/blob/master/examples/receiver.rs
-// Prob as an extremely simple struct that polls for OscPacket which can then be differentiated
-// in the main loop.
-
 pub struct OSCPoller {
     socket: UdpSocket,
     buf: [u8; 1536]

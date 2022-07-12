@@ -54,6 +54,7 @@ impl SamplePack {
 
         if category.is_some() {
 
+            // TODO: Not looparound
             let cat = category.unwrap().to_string();
             let sub_pack = self.samples_ordered.get(&cat);
 

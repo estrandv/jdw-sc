@@ -235,6 +235,7 @@ fn main() {
 
                 self.sc_loop_client.lock().unwrap()
                     .sample_trigger(
+                        // Note how get_arg_vec constructs different args using sample dict data
                         payload.get_arg_vec(self.buffer_handle.clone())
                     );
 
