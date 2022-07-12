@@ -4,9 +4,19 @@ This is a wrapper application to manage a running instance of Supercollider serv
 The main purposes of the project are as follows:
 	1. Manage the lifecycle of and OSC-communication with the Supercollider and sclang processes
 	2. Provide streamlined helper functions to simplify usage of more obtuse supercollider OSC functionality
-		- e.g. s_new with timed sustain, NRT recording, sample playing
+		- e.g. s_new with timed sustain, NRT recording, sample playing by name/category, n_set
+			based on external tags provided by called
 	3. Simplify the usage of Supercollider as a regular music instrument through:
-		- A streamlined way to define sample packs and play them using OSC
-		- A streamlined way to define synths for easy playing of single notes via OSC
+		- A streamlined way to define synths for easy playing of and modification of single notes via OSC
+        - A streamlined way to define sample packs and play them using OSC
 		- A carefully structured and commented open source codebase
+			- Including example scripts for calling all functions
 	4. Integrate Supercollider with the JackDAW microservice project via jdw-router
+		- Note: This might be dated; jdw-sc has little responsibility for anything beyond OSC contracts
+
+# Notable "hacks" to keep track of
+- Important scd synth args
+    - "bus" arg for sampler.scd is heavily referenced in sampler logic - biggest danger is attempting to supply it manually
+    - "gate" arg is the universal "note off" arg - if a synthdef does not have "gate" logic no note off logic will work
+- Insufficient lifecycle management
+	- Many unhandled crashes or exits can still leave a running instance of sclang or scsynth

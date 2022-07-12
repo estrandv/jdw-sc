@@ -1,4 +1,4 @@
-# Simple script for testing the s_new_timed_gate message against the main application
+# Simple script for testing the note_on_timed message against the main application
 
 from pythonosc import udp_client
 import time
@@ -10,7 +10,7 @@ client = udp_client.SimpleUDPClient("127.0.0.1", 13331) # Straight to main appli
 client.send_message("/test", [1, "A string", 1337.0, "/try_this", "whoah"])
 
 # This creates a ringing first tone
-client.send_message("/s_new_timed_gate", [
+client.send_message("/note_on_timed", [
     "miniBrute", # SynthDef to use, See scd/synths/miniBrute.scd
     "miniBrute_TEST_HOLD", # Arbitrary unique external id for the ringing note
     6.0, # Gate time ("note off after n sec")
@@ -35,7 +35,7 @@ for _ in range(0,14):
     if i > (len(arp) - 1):
         i = 0
 
-    client.send_message("/s_new_timed_gate", [
+    client.send_message("/note_on_timed", [
         "miniBrute",
         "miniBrute_TEST" + str(i),
         0.04,
@@ -50,7 +50,7 @@ for _ in range(0,14):
     i+=1
 
 for i in range(0, 53):
-    client.send_message("/s_new_timed_gate", [
+    client.send_message("/note_on_timed", [
         "miniBrute",
         "miniBrute_TEST" + str(i),
         0.04,

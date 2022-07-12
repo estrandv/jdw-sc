@@ -17,7 +17,7 @@ use crate::model::{ProscNoteCreateMessage, ProscNoteModifyMessage, JdwPlayNoteMs
 use std::path::Path;
 use std::time::Duration;
 use crate::osc_client::OSCPoller;
-use crate::osc_model::{PlaySampleMessage, SNewTimedGateMessage};
+use crate::osc_model::{PlaySampleMessage, NoteOnTimedMessage, NoteModifyMessage, NoteOnMessage};
 use crate::samples::SampleDict;
 
 fn main() {
@@ -96,8 +96,9 @@ fn main() {
     // Note how an empty arg-array will simply play the first loaded buffer.
     sc_client.sample_trigger(vec![]);
 
-    sc_client.s_new_timed_gate(
+    sc_client.note_on_timed(
         "default",
+        "initial_testnote",
         vec![OscType::String("freq".to_string()), OscType::Float(240.0)],
         0.1
     );
@@ -154,16 +155,34 @@ fn main() {
 
                     // TODO: Each known address will have an osc_model object it can be parsed into
 
-                    if msg.addr == "/s_new_timed_gate" {
-                        match SNewTimedGateMessage::new(msg) {
+                    if msg.addr == "/note_on_timed" {
+                        match NoteOnTimedMessage::new(msg) {
                             Ok(processed_message) => {
+                                // TODO: Provide external id as well
                                 self.sc_loop_client.lock().unwrap()
-                                    .s_new_timed_gate(
+                                    .note_on_timed(
                                         &processed_message.synth_name,
+                                        &processed_message.external_id,
                                         processed_message.args,
                                         processed_message.gate_time
                                     );
                             },
+                            Err(err_msg) => {
+                                println!("Error processing incoming osc: {}", &err_msg);
+                            }
+                        }
+                    }
+                    else if msg.addr == "/note_on" {
+                        match NoteOnMessage::new(msg) {
+                            Ok(processed_message) => {
+                                self.sc_loop_client.lock().unwrap()
+                                    .note_on(
+                                        &processed_message.external_id,
+                                        &processed_message.synth_name,
+                                        processed_message.args,
+                                    );
+                            },
+                            // TODO: Same for all, could be restructured as a combined ? call
                             Err(err_msg) => {
                                 println!("Error processing incoming osc: {}", &err_msg);
                             }
@@ -177,6 +196,21 @@ fn main() {
                                         // Note how get_arg_vec constructs different args using sample dict data
                                         processed_message.get_args_with_buf(self.buffer_handle.clone())
                                     );
+                            },
+                            Err(err_msg) => {
+                                println!("Error processing incoming osc: {}", &err_msg);
+                            }
+                        }
+                    }
+                    else if msg.addr == "/note_modify" {
+                        match NoteModifyMessage::new(msg) {
+                            Ok(processed_message) => {
+
+                                self.sc_loop_client.lock().unwrap().note_mod(
+                                    &processed_message.external_id_regex,
+                                    processed_message.args
+                                );
+
                             },
                             Err(err_msg) => {
                                 println!("Error processing incoming osc: {}", &err_msg);
@@ -216,7 +250,8 @@ fn main() {
                 match payload.get_gate_time() {
                     Some(time) => {
                         self.sc_loop_client.lock().unwrap()
-                            .s_new_timed_gate(
+                            .note_on_timed(
+                                "dummy_note", // Will be removed soon...
                                 &payload.target,
                                 payload.get_arg_vec(),
                                 time
@@ -224,7 +259,7 @@ fn main() {
                     },
                     None => {
                         self.sc_loop_client.lock().unwrap()
-                            .s_new(
+                            .note_on(
                                 &payload.external_id,
                                 &payload.target,
                                 payload.get_arg_vec()
@@ -280,7 +315,8 @@ fn main() {
 
                 let payload: JdwPlayNoteMsg = serde_json::from_str(&msg.json_contents).unwrap();
                 self.sc_loop_client.lock().unwrap()
-                    .s_new_timed_gate(
+                    .note_on_timed(
+                        "dummy_note", // Will be removed soon ...
                         &payload.target,
                         payload.get_arg_vec(),
                         payload.get_gate_time()

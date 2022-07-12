@@ -7,6 +7,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use std::sync::{Mutex, Arc};
 use std::cell::RefCell;
+use regex::{Error, Regex};
 use crate::samples::SampleDict;
 
 // Representation of a note/"synth" that has been started in supercollider with s_new but not
@@ -29,12 +30,12 @@ impl RunningNote {
                 let value_pos = index + 1;
 
                 match self.args.get(value_pos) {
-                    Some(val) => Option::Some(val.clone()),
+                    Some(val) => Some(val.clone()),
                     None => None
                 }
 
             },
-            None => Option::None
+            None => None
         }
 
     }
@@ -116,13 +117,26 @@ impl NodeManager {
         }
     }
 
-    fn get_running(&self, external_id: &str) -> Option<RunningNote> {
+    fn get_running(&self, external_id_regex: &str) -> Vec<RunningNote> {
 
-        let res = self.running_notes.iter().find(|&note| note.external_id == external_id);
+        let regex_attempt = Regex::new(external_id_regex);
 
-        match res {
-            Some(element) => Option::Some(element.clone()),
-            None => None
+        match regex_attempt {
+            Ok(regex) => {
+
+                let matching: Vec<_> = self.running_notes.iter()
+                    .filter(|note| regex.is_match(&note.external_id))
+                    .map(|note| note.clone())
+                    .collect();
+
+                println!("DEBUG: Found {} running notes matching regex {}", matching.len(), external_id_regex);
+
+                return matching
+            }
+            Err(_) => {
+                println!("WARN: provided regex {} is invalid", external_id_regex);
+                vec![]
+            }
         }
 
     }
@@ -131,7 +145,7 @@ impl NodeManager {
         self.running_notes.retain(|note| note.external_id != external_id);
     }
 
-    pub fn s_new(&mut self, external_id: &str, synth_name: &str, args: Vec<OscType>) {
+    pub fn note_on(&mut self, external_id: &str, synth_name: &str, args: Vec<OscType>) {
 
         let new_note = self.create_note(
             external_id,
@@ -145,22 +159,26 @@ impl NodeManager {
 
     }
 
-    pub fn note_mod(&mut self, external_id: &str, args: Vec<OscType>) {
-        let running = self.get_running(external_id);
+    /*
+        Modify all running notes with an external id matching regex.
+        Note that this function also handles classifying turned off (gate=0) notes
+        as non-running.
+     */
+    pub fn note_mod(&mut self, external_id_regex: &str, args: Vec<OscType>) {
 
-        if running.is_some() {
+        let running = self.get_running(external_id_regex);
 
-            let mut moddable = running.unwrap().clone();
+        for mut note in running {
 
             // Full absolute replace - might want relative eventually
-            moddable.replace_args(args);
+            note.replace_args(args.clone());
 
-            self.sc_handle.lock().unwrap().send_to_server(moddable.clone().to_note_mod());
+            self.sc_handle.lock().unwrap().send_to_server(note.clone().to_note_mod());
 
-            self.remove_running(external_id);
+            self.remove_running(&note.external_id);
 
-            // Keep track of note off (gate 0)
-            let gate_arg = moddable.clone().get_arg("gate");
+            // Keep track of note off (gate=0)
+            let gate_arg = note.clone().get_arg("gate");
             let note_off = match gate_arg {
                 Some(osc_type) => osc_type == OscType::Float(0.0),
                 None => false
@@ -168,18 +186,9 @@ impl NodeManager {
 
             if !note_off {
                 // Only re-add the modified note if we didn't turn it off
-                self.running_notes.push(moddable);
+                self.running_notes.push(note);
             }
 
-        }
-    }
-
-    pub fn note_off(&mut self, external_id: &str) {
-        let running = self.get_running(external_id);
-
-        if running.is_some() {
-            self.sc_handle.lock().unwrap().send_to_server(running.unwrap().to_note_off());
-            self.remove_running(external_id);
         }
     }
 
@@ -196,10 +205,10 @@ impl NodeManager {
 
     }
 
-    pub fn s_new_timed_gate(&self, synth_name: &str, args: Vec<OscType>, gate_time_sec: f32) {
+    pub fn note_on_timed(&self, synth_name: &str, external_id: &str, args: Vec<OscType>, gate_time_sec: f32) {
 
         let new_note = self.create_note(
-            &format!("{}_dummy", synth_name),
+            external_id,
             synth_name,
             args
         );

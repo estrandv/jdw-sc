@@ -59,20 +59,19 @@ impl OscArgHandler for OscMessage {
 
 }
 
-// Re-implementation of JdwPlayNoteMsg
 // Initial structure below: (Note that we might want to expose other s_new args eventually)
-// ["/s_new_timed_gate", "my_synth", "kb_my_synth_n33", 0.2, "arg1", 0.2, "arg2", 0.4, ...]
-pub struct SNewTimedGateMessage {
+// ["/note_on_timed", "my_synth", "kb_my_synth_n33", 0.2, "arg1", 0.2, "arg2", 0.4, ...]
+pub struct NoteOnTimedMessage {
     pub synth_name: String, // The synth upon which to play the note.
     pub external_id: String, // Identifier for note to allow later modification.
     pub gate_time: f32, // Should be in ms rather than beats; wrapper has no BPM.
     pub args: Vec<OscType> // Named args such as "bus" or "rel"
 }
 
-impl SNewTimedGateMessage {
-    pub fn new(msg: OscMessage) -> Result<SNewTimedGateMessage, String> {
-        if msg.addr != "/s_new_timed_gate" {
-            Err(format!("Attempted to parse {} as s_new_timed_gate", msg.addr))
+impl NoteOnTimedMessage {
+    pub fn new(msg: OscMessage) -> Result<NoteOnTimedMessage, String> {
+        if msg.addr != "/note_on_timed" {
+            Err(format!("Attempted to parse {} as note_on_timed", msg.addr))
         } else {
 
             msg.expect_args(3)?;
@@ -85,7 +84,7 @@ impl SNewTimedGateMessage {
 
             // TODO: Ensure even number of named args and that they conform to str,double pattern
 
-            Ok(SNewTimedGateMessage {
+            Ok(NoteOnTimedMessage {
                 synth_name,
                 external_id,
                 gate_time,
@@ -102,19 +101,54 @@ impl SNewTimedGateMessage {
 
 // ProscNoteCreateMessage
 // Non-timed regular s_new with external_id for later modifications
-pub struct SNewTaggedMessage {
+pub struct NoteOnMessage {
     pub synth_name: String, // The synth upon which to play the note.
     pub external_id: String, // Identifier for note to allow later modification.
     pub args: Vec<OscType>, // Named args such as "bus" or "rel"
 }
 
+impl NoteOnMessage {
+    pub fn new (msg: OscMessage) -> Result<NoteOnMessage, String> {
+        msg.expect_args(2)?;
+
+        let synth_name = msg.get_string_at(0, "synth name")?;
+        let external_id = msg.get_string_at(1, "external id")?;
+
+        let named_args = if msg.args.len() > 2 {(&msg.args[2..].to_vec()).clone()} else {vec![]};
+
+        // TODO: Ensure even number of named args and that they conform to str,double pattern
+
+        Ok(NoteOnMessage {
+            synth_name,
+            external_id,
+            args: named_args
+        })
+    }
+}
+
 // ProscNoteModifyMessage
 // n_set implementation with added external_id to allow modifying any note
-// TODO: Should external_id be wildcard?
 // NOTE: Note-off doesn't need its own message; it is simply an n_set with gate=0
-pub struct NSetTaggedMessage {
-    pub external_id: String, // External id of note to change args for
+pub struct NoteModifyMessage {
+    pub external_id_regex: String, // Modify all running external ids matching this regex
     pub args: Vec<OscType>, // Args to set (same as in SNewTimedGateMessage)
+}
+
+impl NoteModifyMessage {
+    pub fn new(message: OscMessage) -> Result<NoteModifyMessage, String> {
+
+        message.expect_args(2)?;
+
+        let external_id_regex = message.get_string_at(0, "external id regex")?;
+        let args = if message.args.len() > 1 {(&message.args[1..].to_vec()).clone()} else {vec![]};
+
+        Ok(NoteModifyMessage {
+            external_id_regex,
+            args
+        })
+
+    }
+
 }
 
 // Example below of args in order with "" as category (= Empty)
