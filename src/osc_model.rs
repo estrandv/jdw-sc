@@ -9,6 +9,8 @@ use std::error::Error;
 use std::fmt::format;
 use rosc::{OscError, OscMessage, OscType};
 use std::option::Option;
+use std::sync::{Arc, Mutex};
+use crate::SampleDict;
 
 /*
     Adding some convenience functions for OscMessage args
@@ -17,13 +19,14 @@ trait OscArgHandler {
     fn expect_args(&self, amount: usize) -> Result<String, String>;
     fn get_string_at(&self, index: usize, name: &str, ) -> Result<String, String>;
     fn get_float_at(&self, index: usize, name: &str, ) -> Result<f32, String>;
+    fn get_int_at(&self, index: usize, name: &str, ) -> Result<i32, String>;
 }
 
 impl OscArgHandler for OscMessage {
 
     fn expect_args(&self, amount: usize) -> Result<String, String> {
 
-        if self.args.len() < (amount + 1) {
+        if self.args.len() < amount {
             return Err(format!("Message did not contain the {} first required args.", amount));
         }
 
@@ -46,6 +49,14 @@ impl OscArgHandler for OscMessage {
             .map_or(Err(err_msg), |s| Ok(s))
     }
 
+    fn get_int_at(&self, index: usize, name: &str, ) -> Result<i32, String> {
+        let err_msg = format!("{} float not found as {}th arg", name, index);
+        self.args
+            .get(index)
+            .map_or(None, |some| some.clone().int())
+            .map_or(Err(err_msg), |s| Ok(s))
+    }
+
 }
 
 // Re-implementation of JdwPlayNoteMsg
@@ -64,7 +75,7 @@ impl SNewTimedGateMessage {
             Err(format!("Attempted to parse {} as s_new_timed_gate", msg.addr))
         } else {
 
-            msg.expect_args(2)?;
+            msg.expect_args(3)?;
 
             let synth_name = msg.get_string_at(0, "synth name")?;
             let external_id = msg.get_string_at(1, "external id")?;
@@ -117,6 +128,40 @@ pub struct PlaySampleMessage {
 
 impl PlaySampleMessage {
     pub fn new(message: OscMessage) -> Result<PlaySampleMessage, String> {
-        Err("unimpl".to_string())
+
+        message.expect_args(3)?;
+
+        let sample_pack = message.get_string_at(0, "sample_pack")?;
+        let index = message.get_int_at(1, "index")?;
+        let cat_arg = message.get_string_at(2, "category")?;
+        let category = if cat_arg == "".to_string() {None} else {Some(cat_arg)};
+        let args = if message.args.len() > 3 {(&message.args[3..].to_vec()).clone()} else {vec![]};
+
+        Ok(PlaySampleMessage {
+            sample_pack,
+            index,
+            category,
+            args
+        })
+
+    }
+
+    // TODO: A bit unhappy with having to use a SampleDict in this strictly OSC library
+    // Once we start porting osc_model to other projects we should port this impl to
+    // a separate rs file
+    pub fn get_args_with_buf(&self, samples: Arc<Mutex<SampleDict>>) -> Vec<OscType> {
+        let mut base_args = self.args.clone();
+
+        let buf_nr = samples
+            .lock()
+            .unwrap()
+            .get_buffer_number(&self.sample_pack, self.index, self.category.clone())
+            .unwrap_or(0); // Should probably be some kind of error, but for now default to base buf
+
+        // TODO: Buf might already be in it. Might be good to wipe it.
+        base_args.push(OscType::String("buf".to_string()));
+        base_args.push(OscType::Int(buf_nr));
+
+        base_args
     }
 }

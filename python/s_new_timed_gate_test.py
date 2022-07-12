@@ -5,8 +5,8 @@ import time
 
 # Hardcoded default port of jdw-sc main application
 
-client = udp_client.SimpleUDPClient("127.0.0.1", 13339) # Via router (requires working subscription)
-#client = udp_client.SimpleUDPClient("127.0.0.1", 13331) # Straight to main application
+#client = udp_client.SimpleUDPClient("127.0.0.1", 13339) # Via router (requires working subscription)
+client = udp_client.SimpleUDPClient("127.0.0.1", 13331) # Straight to main application
 client.send_message("/test", [1, "A string", 1337.0, "/try_this", "whoah"])
 
 # This creates a ringing first tone

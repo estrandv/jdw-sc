@@ -52,6 +52,9 @@ impl SamplePack {
 
     pub fn get_buffer_number(&self, number: i32, category: Option<String>) -> i32 {
 
+        // TODO: negative numbers will result in errors - number should be usize and
+        //   the index in the original message should be validated
+
         if category.is_some() {
 
             // TODO: Not looparound
@@ -59,14 +62,18 @@ impl SamplePack {
             let sub_pack = self.samples_ordered.get(&cat);
 
             if sub_pack.is_some() {
-                let index = (number % (sub_pack.unwrap().len() - 1) as i32 ) as usize;
+
+                let pack_max_index = sub_pack.unwrap().len() as i32;
+
+                let index = ( (number) % (pack_max_index) ) as usize;
+
                 let samples = sub_pack.unwrap().clone();
                 return samples.get(index).unwrap().buffer_nr;
             }
 
         }
 
-        let index = (number % (self.samples.len() - 1) as i32 ) as usize;
+        let index = (number % (self.samples.len()) as i32 ) as usize;
         return self.samples.get(index).unwrap().buffer_nr;
     }
 }
@@ -194,6 +201,7 @@ impl SampleDict {
 
         let mut packs: HashMap<String, SamplePack> = HashMap::new();
 
+
         for entry in fs::read_dir(dir).unwrap() {
             let path = entry.unwrap().path();
             if path.is_dir() {
@@ -202,21 +210,26 @@ impl SampleDict {
                 let mut samples: Vec<Sample> = Vec::new();
                 let mut sample_sorter = SampleSorter {sample_map: HashMap::new()};
 
-                // Each file in a subfolder is treated as a sample
-                for sample_entry in fs::read_dir(path.clone()).unwrap() {
-                    let sample_path = sample_entry.unwrap().path();
-                    let name = sample_path.file_name().unwrap()
-                        .to_str().unwrap()
-                        .to_string();
+                let mut files_in_dir: Vec<_> = fs::read_dir(path.clone()).unwrap()
+                    .map(|e| e.unwrap().path().file_name().unwrap().to_str().unwrap().to_string())
+                    .collect();
 
-                    let buffer_nr = counter.next();
+                files_in_dir.sort(); // Order by name
+
+
+
+                // Each file in a subfolder is treated as a sample
+                for name in files_in_dir {
 
                     if name.contains(".wav") {
+                        let buffer_nr = counter.next();
 
                         let sample = Sample {
-                            file_name: name,
+                            file_name: name.clone(),
                             buffer_nr
                         };
+
+                        println!("Adding sample {} as buf number {}", name, buffer_nr);
 
                         samples.push(sample.clone());
 

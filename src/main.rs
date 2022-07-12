@@ -17,7 +17,7 @@ use crate::model::{ProscNoteCreateMessage, ProscNoteModifyMessage, JdwPlayNoteMs
 use std::path::Path;
 use std::time::Duration;
 use crate::osc_client::OSCPoller;
-use crate::osc_model::SNewTimedGateMessage;
+use crate::osc_model::{PlaySampleMessage, SNewTimedGateMessage};
 use crate::samples::SampleDict;
 
 fn main() {
@@ -168,7 +168,22 @@ fn main() {
                                 println!("Error processing incoming osc: {}", &err_msg);
                             }
                         }
-                    } else {
+                    }
+                    else if msg.addr == "/play_sample" {
+                        match PlaySampleMessage::new(msg) {
+                            Ok(processed_message) => {
+                                self.sc_loop_client.lock().unwrap()
+                                    .sample_trigger(
+                                        // Note how get_arg_vec constructs different args using sample dict data
+                                        processed_message.get_args_with_buf(self.buffer_handle.clone())
+                                    );
+                            },
+                            Err(err_msg) => {
+                                println!("Error processing incoming osc: {}", &err_msg);
+                            }
+                        }
+                    }
+                    else {
                         // TODO: ... each unknown address will be forwarded straight to sc
                     }
 
