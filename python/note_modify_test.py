@@ -13,7 +13,7 @@ client.send_message("/note_on", [
     "freq",
     444.0,
     "relT",
-    0.6,
+    0.2,
     "prt",
     2.5,
     "lfoS",
@@ -30,7 +30,7 @@ client.send_message("/note_on", [
     "freq",
     128.2,
     "prt",
-    1.0
+    0.1
 ])
 
 
@@ -41,27 +41,31 @@ client.send_message("/note_modify", [
     "freq", # Args, same as any note_on message
     380.0,
     "lfoS",
-    44.4
+    44.4,
+    "amp",
+    0.9
 ])
 
 time.sleep(1.0)
 
-client.send_message("/note_modify", [
-    "miniBrute_MODTEST_2",
-    "freq",
-    180.0,
-    "lfoD",
-    0.8,
-    "lfoS",
-    0.1
-])
+# Fun with loops
+for i in range(0, 40):
+    time.sleep(0.003 * i)
 
-time.sleep(3.0)
+    client.send_message("/note_modify", [
+        "miniBrute_MODTEST_2",
+        "freq",
+        128.2 + (i * 22.0),
+        "amp",
+        1.0 - (i * 0.015)
+    ])
+
+time.sleep(2.0)
 
 client.send_message("/note_modify", [
     "miniBrute_MODTEST_(.*)", # Here we use a wildcard regex to catch both our created notes
     "gate",
-    0
+    0.0
 ])
 
 time.sleep(1.0)
@@ -71,5 +75,5 @@ time.sleep(1.0)
 client.send_message("/note_modify", [
     "miniBrute_MODTEST_(.*)",
     "gate",
-    1
+    1.0
 ])

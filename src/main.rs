@@ -101,7 +101,6 @@ fn main() {
         0.1
     );
 
-
     // Create a thread handle for the main loop.
     let sc_loop_client = Arc::new(Mutex::new(sc_client));
 
@@ -137,7 +136,71 @@ fn main() {
 
     impl MainLoop {
 
-        // TODO: Starting a side-implementation for easier switch to OSC
+        fn handle_message(&self, msg: OscMessage) -> Result<(), String> {
+            // Handle with result to bring down duplicate code below
+
+            println!(">> Received OSC message for function/address: {} with args {:?}", msg.addr, msg.args);
+
+            if msg.addr == "/note_on_timed" {
+
+                let processed_message = NoteOnTimedMessage::new(msg)?;
+
+                self.sc_loop_client.lock().unwrap()
+                    .note_on_timed(
+                        &processed_message.synth_name,
+                        &processed_message.external_id,
+                        processed_message.args,
+                        processed_message.gate_time
+                    );
+
+                Ok(())
+
+            }
+            else if msg.addr == "/note_on" {
+                let processed_message = NoteOnMessage::new(msg)?;
+                self.sc_loop_client.lock().unwrap()
+                    .note_on(
+                        &processed_message.external_id,
+                        &processed_message.synth_name,
+                        processed_message.args,
+                    );
+
+                Ok(())
+            }
+            else if msg.addr == "/play_sample" {
+
+                let processed_message = PlaySampleMessage::new(msg)?;
+                self.sc_loop_client.lock().unwrap()
+                    .sample_trigger(
+                        // Note how get_arg_vec constructs different args using sample dict data
+                        processed_message.get_args_with_buf(self.buffer_handle.clone())
+                    );
+                Ok(())
+            }
+            else if msg.addr == "/note_modify" {
+                let processed_message = NoteModifyMessage::new(msg)?;
+
+                self.sc_loop_client.lock().unwrap().note_mod(
+                    &processed_message.external_id_regex,
+                    processed_message.args
+                );
+
+                Ok(())
+            }
+            else {
+
+                // TODO: ... each unknown address will be forwarded straight to sc
+                // Main loop does not have a direct handle of supercollider.send_to_server...
+                // It only has a nodemanager... which has a handle.
+                // Might be worth rethinking what does what in supercollider.rs
+                // ... but in the meantime this is not an important feature
+                // Also note: might there be client messages we want to send from outside?
+
+                Ok(())
+            }
+
+        }
+
         fn process_osc(
             &self,
             packet: OscPacket
@@ -147,76 +210,10 @@ fn main() {
 
                     println!(">> Received OSC message for function/address: {} with args {:?}", msg.addr, msg.args);
 
-                    if msg.addr == "/note_on_timed" {
-                        match NoteOnTimedMessage::new(msg) {
-                            Ok(processed_message) => {
-                                // TODO: Provide external id as well
-                                self.sc_loop_client.lock().unwrap()
-                                    .note_on_timed(
-                                        &processed_message.synth_name,
-                                        &processed_message.external_id,
-                                        processed_message.args,
-                                        processed_message.gate_time
-                                    );
-                            },
-                            Err(err_msg) => {
-                                println!("Error processing incoming osc: {}", &err_msg);
-                            }
-                        }
-                    }
-                    else if msg.addr == "/note_on" {
-                        match NoteOnMessage::new(msg) {
-                            Ok(processed_message) => {
-                                self.sc_loop_client.lock().unwrap()
-                                    .note_on(
-                                        &processed_message.external_id,
-                                        &processed_message.synth_name,
-                                        processed_message.args,
-                                    );
-                            },
-                            // TODO: Same for all, could be restructured as a combined ? call
-                            Err(err_msg) => {
-                                println!("Error processing incoming osc: {}", &err_msg);
-                            }
-                        }
-                    }
-                    else if msg.addr == "/play_sample" {
-                        match PlaySampleMessage::new(msg) {
-                            Ok(processed_message) => {
-                                self.sc_loop_client.lock().unwrap()
-                                    .sample_trigger(
-                                        // Note how get_arg_vec constructs different args using sample dict data
-                                        processed_message.get_args_with_buf(self.buffer_handle.clone())
-                                    );
-                            },
-                            Err(err_msg) => {
-                                println!("Error processing incoming osc: {}", &err_msg);
-                            }
-                        }
-                    }
-                    else if msg.addr == "/note_modify" {
-                        match NoteModifyMessage::new(msg) {
-                            Ok(processed_message) => {
-
-                                self.sc_loop_client.lock().unwrap().note_mod(
-                                    &processed_message.external_id_regex,
-                                    processed_message.args
-                                );
-
-                            },
-                            Err(err_msg) => {
-                                println!("Error processing incoming osc: {}", &err_msg);
-                            }
-                        }
-                    }
-                    else {
-
-                        self.sc_loop_client.lock().unwrap()
-
-                        // TODO: ... each unknown address will be forwarded straight to sc
-                    }
-
-                    // TODO: Might there be client messages that we want to send from outside?
+                    match self.handle_message(msg) {
+                        Ok(()) => {}
+                        Err(e) => {println!("WARN: {}", e)}
+                    };
 
                 }
                 OscPacket::Bundle(bundle) => {

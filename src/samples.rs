@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::fs;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use rosc::OscType;
+use crate::PlaySampleMessage;
 
 #[derive(Debug, Clone)]
 pub struct Sample {
@@ -255,5 +258,28 @@ impl SampleDict {
             counter
         }
         
+    }
+
+
+}
+
+impl PlaySampleMessage {
+    // TODO: A bit unhappy with having to use a SampleDict in this strictly OSC library
+    // Once we start porting osc_model to other projects we should port this impl to
+    // a separate rs file
+    pub fn get_args_with_buf(&self, samples: Arc<Mutex<SampleDict>>) -> Vec<OscType> {
+        let mut base_args = self.args.clone();
+
+        let buf_nr = samples
+            .lock()
+            .unwrap()
+            .get_buffer_number(&self.sample_pack, self.index, self.category.clone())
+            .unwrap_or(0); // Should probably be some kind of error, but for now default to base buf
+
+        // TODO: Buf might already be in it. Might be good to wipe it.
+        base_args.push(OscType::String("buf".to_string()));
+        base_args.push(OscType::Int(buf_nr));
+
+        base_args
     }
 }

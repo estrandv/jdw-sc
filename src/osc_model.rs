@@ -16,6 +16,7 @@ use crate::SampleDict;
     Adding some convenience functions for OscMessage args
  */
 trait OscArgHandler {
+    fn expect_addr(&self, addr_name: &str) -> Result<(), String>;
     fn expect_args(&self, amount: usize) -> Result<String, String>;
     fn get_string_at(&self, index: usize, name: &str, ) -> Result<String, String>;
     fn get_float_at(&self, index: usize, name: &str, ) -> Result<f32, String>;
@@ -23,6 +24,14 @@ trait OscArgHandler {
 }
 
 impl OscArgHandler for OscMessage {
+
+    fn expect_addr(&self, addr_name: &str) -> Result<(), String> {
+        if &self.addr.to_string() != addr_name {
+            return Err(format!("Attempted to format {} as the wrong kind of message - this likely a human error in the source code", addr_name));
+        }
+
+        Ok(())
+    }
 
     fn expect_args(&self, amount: usize) -> Result<String, String> {
 
@@ -59,6 +68,37 @@ impl OscArgHandler for OscMessage {
 
 }
 
+// Verify that custom args follow the String,float,String,float... pattern
+// Note: This could possibly be a bit expensive time-wise!
+fn validate_args(args: &Vec<OscType>) -> Result<(), String> {
+
+    let mut next_is_string = true;
+
+    for arg in args {
+        match arg {
+            OscType::Float(_) => {
+                if next_is_string {
+                    return Err("Malformed message: Custom arg float where string expected".to_string());
+                }
+
+                next_is_string = true;
+            },
+            OscType::String(_) => {
+                if !next_is_string {
+                    return Err("Malformed message: Custom arg string where float expected".to_string());
+                }
+
+                next_is_string = false;
+            },
+            _ => {
+                return Err("Malformed message: Custom arg in message not of type string or float".to_string());
+            }
+        }
+    }
+
+    Ok(())
+}
+
 // Initial structure below: (Note that we might want to expose other s_new args eventually)
 // ["/note_on_timed", "my_synth", "kb_my_synth_n33", 0.2, "arg1", 0.2, "arg2", 0.4, ...]
 pub struct NoteOnTimedMessage {
@@ -70,27 +110,26 @@ pub struct NoteOnTimedMessage {
 
 impl NoteOnTimedMessage {
     pub fn new(msg: OscMessage) -> Result<NoteOnTimedMessage, String> {
-        if msg.addr != "/note_on_timed" {
-            Err(format!("Attempted to parse {} as note_on_timed", msg.addr))
-        } else {
 
-            msg.expect_args(3)?;
+        msg.expect_addr("/note_on_timed")?;
+        msg.expect_args(3)?;
 
-            let synth_name = msg.get_string_at(0, "synth name")?;
-            let external_id = msg.get_string_at(1, "external id")?;
-            let gate_time = msg.get_float_at(2, "gate time")?;
+        let synth_name = msg.get_string_at(0, "synth name")?;
+        let external_id = msg.get_string_at(1, "external id")?;
+        let gate_time = msg.get_float_at(2, "gate time")?;
 
-            let named_args = if msg.args.len() > 3 {(&msg.args[3..].to_vec()).clone()} else {vec![]};
+        let named_args = if msg.args.len() > 3 {(&msg.args[3..].to_vec()).clone()} else {vec![]};
 
-            // TODO: Ensure even number of named args and that they conform to str,double pattern
+        validate_args(&named_args)?;
 
-            Ok(NoteOnTimedMessage {
-                synth_name,
-                external_id,
-                gate_time,
-                args: named_args
-            })
-        }
+        // TODO: Ensure even number of named args and that they conform to str,double pattern
+
+        Ok(NoteOnTimedMessage {
+            synth_name,
+            external_id,
+            gate_time,
+            args: named_args
+        })
     }
 
     // TODO: Note differences with supercollider.rs - typically you need access to e.g. running notes
@@ -115,6 +154,7 @@ impl NoteOnMessage {
         let external_id = msg.get_string_at(1, "external id")?;
 
         let named_args = if msg.args.len() > 2 {(&msg.args[2..].to_vec()).clone()} else {vec![]};
+        validate_args(&named_args)?;
 
         // TODO: Ensure even number of named args and that they conform to str,double pattern
 
@@ -141,6 +181,7 @@ impl NoteModifyMessage {
 
         let external_id_regex = message.get_string_at(0, "external id regex")?;
         let args = if message.args.len() > 1 {(&message.args[1..].to_vec()).clone()} else {vec![]};
+        validate_args(&args)?;
 
         Ok(NoteModifyMessage {
             external_id_regex,
@@ -170,6 +211,7 @@ impl PlaySampleMessage {
         let cat_arg = message.get_string_at(2, "category")?;
         let category = if cat_arg == "".to_string() {None} else {Some(cat_arg)};
         let args = if message.args.len() > 3 {(&message.args[3..].to_vec()).clone()} else {vec![]};
+        validate_args(&args)?;
 
         Ok(PlaySampleMessage {
             sample_pack,
@@ -180,22 +222,5 @@ impl PlaySampleMessage {
 
     }
 
-    // TODO: A bit unhappy with having to use a SampleDict in this strictly OSC library
-    // Once we start porting osc_model to other projects we should port this impl to
-    // a separate rs file
-    pub fn get_args_with_buf(&self, samples: Arc<Mutex<SampleDict>>) -> Vec<OscType> {
-        let mut base_args = self.args.clone();
 
-        let buf_nr = samples
-            .lock()
-            .unwrap()
-            .get_buffer_number(&self.sample_pack, self.index, self.category.clone())
-            .unwrap_or(0); // Should probably be some kind of error, but for now default to base buf
-
-        // TODO: Buf might already be in it. Might be good to wipe it.
-        base_args.push(OscType::String("buf".to_string()));
-        base_args.push(OscType::Int(buf_nr));
-
-        base_args
-    }
 }
