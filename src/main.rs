@@ -14,7 +14,7 @@ use rosc::{OscType, OscMessage, OscPacket};
 use std::cell::RefCell;
 use std::path::Path;
 use std::time::Duration;
-use log::{debug, info, LevelFilter, warn};
+use log::{debug, error, info, LevelFilter, warn};
 use simple_logger::SimpleLogger;
 use crate::osc_client::OSCPoller;
 use crate::osc_model::{PlaySampleMessage, NoteOnTimedMessage, NoteModifyMessage, NoteOnMessage, TaggedBundle};
@@ -72,7 +72,11 @@ fn main() {
         Prepare sample players. All samples are read into buffers via read_scd on the sclang client.
         The sample dict struct keeps track of which buffer index belongs to which sample pack.
      */
-    let buffer_data = samples::SampleDict::from_dir(Path::new("sample_packs"));
+    let buffer_data = samples::SampleDict::from_dir(Path::new("sample_packs")).unwrap_or_else(|e| {
+        error!("Unable to read buffer data: {} - no samples will be provided", e);
+        SampleDict::dummy()
+    });
+
     let buffer_handle = Arc::new(Mutex::new(buffer_data));
     let buffer_string = buffer_handle.clone().lock().unwrap().to_buffer_load_scd();
 

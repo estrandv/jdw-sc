@@ -197,7 +197,7 @@ impl NoteModifyMessage {
 // ["/play_sample", "example", 2, "", "arg1", 0.2, "arg2", 0.4, ...]
 pub struct PlaySampleMessage {
     pub sample_pack: String, // The parent dir of the sample file
-    pub index: i32, // Sample number - either as plain order in dir or in a given category
+    pub index: usize, // Sample number - either as plain order in dir or in a given category
     pub category: Option<String>, // TODO: Arbitrary string codes... is there a better way?
     pub args: Vec<OscType>, // Args to set (same as in SNewTimedGateMessage)
 }
@@ -209,6 +209,11 @@ impl PlaySampleMessage {
 
         let sample_pack = message.get_string_at(0, "sample_pack")?;
         let index = message.get_int_at(1, "index")?;
+
+        if index < 0 {
+            return Err("Index arg in sample message incompatible: negative".to_string());
+        }
+
         let cat_arg = message.get_string_at(2, "category")?;
         let category = if cat_arg == "".to_string() {None} else {Some(cat_arg)};
         let args = if message.args.len() > 3 {(&message.args[3..].to_vec()).clone()} else {vec![]};
@@ -216,7 +221,7 @@ impl PlaySampleMessage {
 
         Ok(PlaySampleMessage {
             sample_pack,
-            index,
+            index: index as usize,
             category,
             args
         })

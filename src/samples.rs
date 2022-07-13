@@ -1,8 +1,10 @@
 use std::path::{Path, PathBuf};
 use std::fs;
 use std::collections::HashMap;
+use std::fmt::format;
+use std::io::Error;
 use std::sync::{Arc, Mutex};
-use log::debug;
+use log::{debug, info};
 use rosc::OscType;
 use crate::PlaySampleMessage;
 
@@ -54,30 +56,29 @@ impl SamplePack {
         script.to_string()
     }
 
-    pub fn get_buffer_number(&self, number: i32, category: Option<String>) -> i32 {
-
-        // TODO: negative numbers will result in errors - number should be usize and
-        //   the index in the original message should be validated
+    pub fn get_buffer_number(&self, number: usize, category: Option<String>) -> i32 {
 
         if category.is_some() {
 
-            // TODO: Not looparound
-            let cat = category.unwrap().to_string();
+            let cat = category.clone().unwrap().to_string();
             let sub_pack = self.samples_ordered.get(&cat);
 
             if sub_pack.is_some() {
 
-                let pack_max_index = sub_pack.unwrap().len() as i32;
+                let pack_max_index = sub_pack.unwrap().len();
 
-                let index = ( (number) % (pack_max_index) ) as usize;
+                let index = ( (number) % (pack_max_index) );
 
                 let samples = sub_pack.unwrap().clone();
                 return samples.get(index).unwrap().buffer_nr;
             }
+            else {
+                info!("Cannot find requested category {}, defaulting to pack index for sample play", category.clone().unwrap());
+            }
 
         }
 
-        let index = (number % (self.samples.len()) as i32 ) as usize;
+        let index = (number % (self.samples.len()));
         return self.samples.get(index).unwrap().buffer_nr;
     }
 }
@@ -184,7 +185,14 @@ pub struct SampleDict {
 
 impl SampleDict {
 
-    pub fn get_buffer_number(&self, pack: &str, number: i32, category: Option<String>) -> Option<i32> {
+    pub fn dummy() -> SampleDict {
+        SampleDict {
+            sample_packs: HashMap::new(),
+            counter: Counter{value: 1}
+        }
+    }
+
+    pub fn get_buffer_number(&self, pack: &str, number: usize, category: Option<String>) -> Option<i32> {
         let pack= self.sample_packs.get(pack);
 
         match pack {
@@ -203,7 +211,7 @@ impl SampleDict {
     }
 
     // TODO: Result return to avoid IO errors crashing everything
-    pub fn from_dir(dir: &Path) -> SampleDict {
+    pub fn from_dir(dir: &Path) -> Result<SampleDict, String> {
 
         let mut counter = Counter {value: -1};
 
@@ -211,16 +219,41 @@ impl SampleDict {
 
 
         for entry in fs::read_dir(dir).unwrap() {
-            let path = entry.unwrap().path();
+            let path = match entry {
+                Ok(e) => {Ok(e)}
+                Err(e) => {Err(format!("File read error: {}", e))}
+            }?.path();
             if path.is_dir() {
 
                 // Each found subfolder is treated as a sample pack
                 let mut samples: Vec<Sample> = Vec::new();
                 let mut sample_sorter = SampleSorter {sample_map: HashMap::new()};
 
-                let mut files_in_dir: Vec<_> = fs::read_dir(path.clone()).unwrap()
-                    .map(|e| e.unwrap().path().file_name().unwrap().to_str().unwrap().to_string())
-                    .collect();
+                let read_subdir = match fs::read_dir(path.clone()) {
+                    Ok(d) => {Ok(d)}
+                    Err(e) => {Err(format!("IO Error {}", e))}
+                }?;
+
+                let files_in_dir_scan: Vec<Result<String, String>> = read_subdir
+                    .map(|e| {
+
+                        let res = match e {
+                            Ok(r) => {r
+                                .file_name()
+                                .to_str()
+                                .map(|s| s.to_string())
+                                .ok_or("File name unreadable".to_string())}
+                            Err(err) => {Err(format!("IO error {}", err))}
+                        };
+
+                        return res;
+
+                    }).collect();
+
+                let mut files_in_dir: Vec<String> = Vec::new();
+                for result in files_in_dir_scan {
+                    files_in_dir.push(result?.to_string());
+                }
 
                 files_in_dir.sort(); // Order by name
 
@@ -241,11 +274,15 @@ impl SampleDict {
 
                         sample_sorter.add(sample);
 
+                    } else {
+                        debug!("Ignoring sample file {}; invalid format", name.clone());
                     }
 
                 }
 
-                let pack_name = path.file_name().unwrap().to_str().unwrap().to_string();
+                let pack_name = path.file_name().ok_or("dir is nameless")?
+                    .to_str().ok_or("dir name unreadable")?
+                    .to_string();
 
                 packs.insert(pack_name, SamplePack{
                     dir_path: path,
@@ -256,10 +293,10 @@ impl SampleDict {
             }
         }
 
-        SampleDict {
+        Ok(SampleDict {
             sample_packs: packs,
             counter
-        }
+        })
         
     }
 
