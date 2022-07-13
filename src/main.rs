@@ -1,9 +1,10 @@
 mod supercollider;
-mod model;
 mod synth_templates;
 mod samples;
 mod osc_model;
 mod osc_client;
+mod nrt_record;
+mod config;
 
 use subprocess::{Exec, Redirection, Popen, PopenConfig};
 use std::process::exit;
@@ -11,7 +12,6 @@ use std::sync::{Mutex, Arc};
 use crate::supercollider::{Supercollider, NodeManager};
 use rosc::{OscType, OscMessage, OscPacket};
 use std::cell::RefCell;
-use crate::model::{ProscNoteCreateMessage, ProscNoteModifyMessage, JdwPlayNoteMsg, JdwPlaySampleMsg, JdwSequencerBatchMsg};
 use std::path::Path;
 use std::time::Duration;
 use log::{debug, info, LevelFilter, warn};
@@ -23,9 +23,8 @@ use crate::samples::SampleDict;
 fn main() {
 
     // Handles all log macros, e.g. "warn!()" to print info in terminal
-    // NOTE: Configurable level is a future want
     SimpleLogger::new()
-        .with_level(LevelFilter::Debug)
+        .with_level(config::LOG_LEVEL)
         .init().unwrap();
 
     /*

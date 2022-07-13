@@ -82,6 +82,7 @@ impl SamplePack {
     }
 }
 
+// TODO: Can be in generic util.rs
 pub struct Counter {
     value: i32
 }
@@ -94,6 +95,9 @@ impl Counter {
     }
 }
 
+/*
+    Sorts samples in pack by category using very barebones keyword detection on filenames.
+ */
 struct SampleSorter {
     pub sample_map: HashMap<String, Vec<Sample>>
 }
@@ -220,8 +224,6 @@ impl SampleDict {
 
                 files_in_dir.sort(); // Order by name
 
-
-
                 // Each file in a subfolder is treated as a sample
                 for name in files_in_dir {
 
@@ -265,9 +267,6 @@ impl SampleDict {
 }
 
 impl PlaySampleMessage {
-    // TODO: A bit unhappy with having to use a SampleDict in this strictly OSC library
-    // Once we start porting osc_model to other projects we should port this impl to
-    // a separate rs file
     pub fn get_args_with_buf(&self, samples: Arc<Mutex<SampleDict>>) -> Vec<OscType> {
         let mut base_args = self.args.clone();
 

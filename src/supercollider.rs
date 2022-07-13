@@ -9,6 +9,8 @@ use std::sync::{Mutex, Arc};
 use std::cell::RefCell;
 use log::{debug, info, warn};
 use regex::{Error, Regex};
+use crate::config;
+use crate::config::{SC_SERVER_INCOMING_READ_TIMEOUT, SCLANG_IN_PORT, SERVER_IN_PORT, SERVER_OUT_PORT};
 use crate::samples::SampleDict;
 
 // Representation of a note/"synth" that has been started in supercollider with s_new but not
@@ -193,7 +195,7 @@ impl NodeManager {
         }
     }
 
-    // TODO: Never cleaning can result in overflow - consider gate time
+    // TODO: Never cleaning can result in overflow - consider gate time or detectSilence
     pub fn sample_trigger(&self, args: Vec<OscType>) {
 
         let new_note = self.create_note(
@@ -238,34 +240,35 @@ pub struct Supercollider {
 }
 
 impl Supercollider {
+    // TODO: Do result. Shut down application on any bind failures.
     pub fn new() -> Supercollider {
 
         let mut process = Popen::create(
-            &["sclang", "src/scd/start_server.scd", "-u", "13336"],
+            &["sclang", "src/scd/start_server.scd", "-u", &SCLANG_IN_PORT.to_string()],
             PopenConfig { stdout: Redirection::Merge, ..Default::default() }
         ).unwrap();
 
         // Note: this port is targeted by start_server.scd
-        let recv_addr = match SocketAddrV4::from_str("127.0.0.1:13338") {
+        let recv_addr = match SocketAddrV4::from_str(&config::get_addr(SERVER_OUT_PORT)) {
             Ok(addr) => addr,
             Err(_) => panic!("Error binding incoming osc address"),
         };
 
         let incoming_socket = UdpSocket::bind(recv_addr).unwrap();
 
-        let scsynth_addr = match SocketAddrV4::from_str("127.0.0.1:13337") {
+        let scsynth_addr = match SocketAddrV4::from_str(&config::get_addr(SERVER_IN_PORT)) {
             Ok(addr) => addr,
             Err(_) => panic!("Error binding scsynth address"),
         };
 
-        let sclang_addr = match SocketAddrV4::from_str("127.0.0.1:13336") {
+        let sclang_addr = match SocketAddrV4::from_str(&config::get_addr(SCLANG_IN_PORT)) {
             Ok(addr) => addr,
             Err(_) => panic!("Error binding sclang address"),
         };
 
         // Note this sneaky configuration. Mostly needed so that wait_for method does not stay on forever ...
         // Seems to also enable ctrl+c interrupt for some reason.
-        incoming_socket.set_read_timeout(Option::Some(Duration::from_secs(30)));
+        incoming_socket.set_read_timeout(Option::Some(Duration::from_secs(SC_SERVER_INCOMING_READ_TIMEOUT)));
 
         Supercollider {
             sclang_process: process,

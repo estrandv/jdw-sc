@@ -4,6 +4,8 @@ use rosc::{OscPacket, decoder};
 use std::env;
 use std::net::{SocketAddr, SocketAddrV4, UdpSocket};
 use std::str::FromStr;
+use crate::config;
+use crate::config::{APPLICATION_IN_PORT, APPLICATION_IP};
 
 // NOTE: Naming is perhaps suboptimal. This mainly concerns receiving external OSC messages.
 // Different OSC handling is also used in the supercollider.rs functions.
@@ -16,8 +18,7 @@ pub struct OSCPoller {
 impl OSCPoller {
 
     pub fn new() -> OSCPoller {
-        // TODO: config port
-        let addr = match SocketAddrV4::from_str("127.0.0.1:13331") {
+        let addr = match SocketAddrV4::from_str(&config::get_addr(APPLICATION_IN_PORT)) {
             Ok(addr) => addr,
             Err(e) => panic!("{}", e),
         };

@@ -1,7 +1,9 @@
 use std::fs::DirEntry;
 use std::{io, fs};
 use std::path::Path;
+use log::{debug, info};
 
+// TODO: We can avoid syncing filename and synth name via templating
 pub fn read_all(operation: &str) -> Vec<String> {
     let path = Path::new("src/scd/synths");
 
@@ -10,9 +12,16 @@ pub fn read_all(operation: &str) -> Vec<String> {
     for entry in fs::read_dir(path).unwrap() {
         let path = entry.unwrap().path();
         let raw_text = fs::read_to_string(path.clone()).unwrap();
-        let text = raw_text.replace("{:operation}", operation);
+
+        let synth_name = path.file_stem().unwrap().to_str().unwrap().to_string();
+
+
+        let mut text = raw_text.replace("{:operation}", operation);
+        text = text.replace("{:synth_name}", &synth_name);
 
         let file_name = path.file_name().unwrap().to_str().unwrap().to_string();
+
+        debug!("Reading: {}", file_name.clone());
 
         // Add a postln to the end so that we see a confirmation message in console.
         let with_load_msg = text + &format!("\n\"{} loaded.\".postln;", file_name);

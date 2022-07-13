@@ -1,3 +1,9 @@
+/*
+    Server launch script, containing jdw application specific configurations and custom functions.
+    TODO: Needs templating
+    TODO: using o to send messages into main logger would make for a better alternative to println
+*/
+
 //Server.supernova; // Can be used to switch backend.
 s = Server.new("prosc", NetAddr.new("127.0.0.1", 13337));
 s.options.memSize = 2000000; // 2gb
