@@ -6,6 +6,7 @@ use std::io::Error;
 use std::sync::{Arc, Mutex};
 use log::{debug, info};
 use rosc::OscType;
+use crate::config::{SERVER_NAME, SERVER_OSC_SOCKET_NAME};
 use crate::PlaySampleMessage;
 
 #[derive(Debug, Clone)]
@@ -19,7 +20,8 @@ impl Sample {
     // Typical "read into buffer" script to be run on server boot
     pub fn to_buffer_load_scd(&self, dir: &str) -> String {
         format!(
-            "Buffer.read(s, File.getcwd +/+ \"{}\", 0, -1, bufnum: {}); \n",
+            "Buffer.read({}, File.getcwd +/+ \"{}\", 0, -1, bufnum: {}); \n",
+            SERVER_NAME,
             dir.to_string() + "/" + &self.file_name.to_string(),
             self.buffer_nr
         )
@@ -27,6 +29,7 @@ impl Sample {
 
     // Buffer load as-osc, suitable for loading into the NRT server
     pub fn to_nrt_scd_row(&self, dir: &str) -> String {
+        // TODO: TEmplate-friendly pieces
         format!(
             "[0.0, (Buffer.new(server, 44100 * 8.0, 2, bufnum: {})).allocReadMsg(File.getcwd +/+ \"{}\")]",
             dir.to_string() + &self.file_name.to_string(),
@@ -207,16 +210,15 @@ impl SampleDict {
     pub fn to_buffer_load_scd(&self) -> String {
         let vec = self.sample_packs.values().clone().collect::<Vec<&SamplePack>>();
         let vector = vec.iter().map(|pack| pack.to_buffer_load_scd()).collect::<Vec<String>>();
-        vector.join("\n") + "\no.sendMsg(\"/buffers_loaded\", \"ok\");"
+        let result = vector.join("\n") + "\n" + SERVER_OSC_SOCKET_NAME + ".sendMsg(\"/buffers_loaded\", \"ok\");";
+        result
     }
 
-    // TODO: Result return to avoid IO errors crashing everything
     pub fn from_dir(dir: &Path) -> Result<SampleDict, String> {
 
         let mut counter = Counter {value: -1};
 
         let mut packs: HashMap<String, SamplePack> = HashMap::new();
-
 
         for entry in fs::read_dir(dir).unwrap() {
             let path = match entry {

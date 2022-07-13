@@ -2,14 +2,17 @@ use subprocess::{Popen, PopenConfig, Redirection};
 use std::net::{SocketAddrV4, UdpSocket};
 use std::str::FromStr;
 use rosc::{OscPacket, OscTime, OscType, OscMessage, encoder};
-use std::thread;
+use std::{fs, thread};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use std::sync::{Mutex, Arc};
 use std::cell::RefCell;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 use log::{debug, info, warn};
 use regex::{Error, Regex};
-use crate::config;
+use crate::{config, scd_templating};
 use crate::config::{SC_SERVER_INCOMING_READ_TIMEOUT, SCLANG_IN_PORT, SERVER_IN_PORT, SERVER_OUT_PORT};
 use crate::samples::SampleDict;
 
@@ -243,8 +246,18 @@ impl Supercollider {
     // TODO: Do result. Shut down application on any bind failures.
     pub fn new() -> Supercollider {
 
+        // TODO: Error handling
+        // TODO: General temp folder management should be its own little util
+        let templated = scd_templating::create_boot_script().unwrap();
+        let temp_dir = Path::new("temp");
+        if !temp_dir.exists() {
+            fs::create_dir(Path::new("temp")).unwrap();
+        }
+        let mut file = File::create("temp/start_server.scd").unwrap();
+        file.write_all(templated.as_bytes()).unwrap();
+
         let mut process = Popen::create(
-            &["sclang", "src/scd/start_server.scd", "-u", &SCLANG_IN_PORT.to_string()],
+            &["sclang", "temp/start_server.scd", "-u", &SCLANG_IN_PORT.to_string()],
             PopenConfig { stdout: Redirection::Merge, ..Default::default() }
         ).unwrap();
 

@@ -1,5 +1,5 @@
 mod supercollider;
-mod synth_templates;
+mod scd_templating;
 mod samples;
 mod osc_model;
 mod osc_client;
@@ -56,7 +56,7 @@ fn main() {
         Use the synth definitions from the synths dir to ready custom scd messages.
         The messages then create these synthdefs on the server using the sclang client.
      */
-    let synth_defs = synth_templates::read_all("add");
+    let synth_defs = scd_templating::read_all_synths("add");
 
     // See start_server.scd for the /read_scd definition
     for def in synth_defs {

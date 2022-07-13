@@ -19,4 +19,7 @@ The main purposes of the project are as follows:
     - "bus" arg for sampler.scd is heavily referenced in sampler logic - biggest danger is attempting to supply it manually
     - "gate" arg is the universal "note off" arg - if a synthdef does not have "gate" logic no note off logic will work
 - Insufficient lifecycle management
-	- Many unhandled crashes or exits can still leave a running instance of sclang or scsynth
+    - Many unhandled crashes or exits can still leave a running instance of sclang or scsynth
+- Magic vars shared by server scd and application
+    - example: server send is named "o" and referenced by samples.rs
+    - Can be fixed with templating

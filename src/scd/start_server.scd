@@ -1,21 +1,21 @@
 /*
     Server launch script, containing jdw application specific configurations and custom functions.
-    TODO: Needs templating
+    Note that this is a template - {:var} placeholders are filled in scd_templating.rs
     TODO: using o to send messages into main logger would make for a better alternative to println
 */
 
 //Server.supernova; // Can be used to switch backend.
-s = Server.new("prosc", NetAddr.new("127.0.0.1", 13337));
-s.options.memSize = 2000000; // 2gb
-s.latency = 0.05; // Default latency setting is 0.2 sec - this might be irrelevant for our use case but set nontheless
+{:server_name} = Server.new("jdw-sc", NetAddr.new("{:application_ip}", {:server_in_port}));
+{:server_name}.options.memSize = {:memory_bytes};
+{:server_name}.latency = 0.05; // Default latency setting is 0.2 sec - this might be irrelevant for our use case but set nontheless
 
 // https://crashserver.fr/tutorial-how-to-record-foxdot-multi-outputs-in-a-daw/
-// s.options.numOutputBusChannels = 8;
+// {:server_name}.options.numOutputBusChannels = 8;
 
-o = NetAddr.new("127.0.0.1", 13338);
+{:out_socket_name} = NetAddr.new("{:application_ip}", {:server_out_port});
 
 //History.showLogFile;
-s.waitForBoot({
+{:server_name}.waitForBoot({
 	("Client Port: " + NetAddr.langPort).postln;
 
 	/*
@@ -36,7 +36,7 @@ s.waitForBoot({
 			fn.readAllString.interpret;
 			fn.close;
 
-			o.sendMsg("/customscript_done", "ok");
+			{:out_socket_name}.sendMsg("/customscript_done", "ok");
 
 		},
 		'/customscript'
@@ -51,7 +51,7 @@ s.waitForBoot({
         {
             arg msg, time, addr, port;
             msg[1].asString.interpret;
-            o.sendMsg("/read_scd_done", "ok");
+            {:out_socket_name}.sendMsg("/read_scd_done", "ok");
         },
         '/read_scd'
     );
@@ -61,6 +61,6 @@ s.waitForBoot({
 	/*
 	    Custom message sent on startup completion to let the wrapper know that all custom logic is ready
 	*/
-	o.sendMsg("/init", "ok");
+	{:out_socket_name}.sendMsg("/init", "ok");
 });
 
