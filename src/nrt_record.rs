@@ -17,5 +17,5 @@
             - With RunningNote maintained we might only need to tweak the creation of each
                 different msg->runningNote into something more generic
         5. Templating like in python. SampleDict must convert buffer-reads to initial scd.
-        6.
+        6. smooth sailing from here
  */

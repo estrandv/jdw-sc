@@ -6,9 +6,10 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::format;
-use rosc::{OscError, OscMessage, OscType};
+use rosc::{OscBundle, OscError, OscMessage, OscPacket, OscType};
 use std::option::Option;
 use std::sync::{Arc, Mutex};
+use log::debug;
 use crate::SampleDict;
 
 /*
@@ -222,4 +223,41 @@ impl PlaySampleMessage {
     }
 
 
+}
+
+/*
+    In order to properly utilize bundles I have created a standard where the first
+        packet in every JDW-compatible bundle is an OSC message with a bundle type
+        string contained within, e.g.: ["/bundle_tag", "nrt_record_request"]
+ */
+pub struct TaggedBundle {
+    bundle_tag: String,
+    contents: Vec<OscPacket>
+}
+
+impl TaggedBundle {
+    pub fn new(bundle: OscBundle) -> Result<TaggedBundle, String> {
+        let first_msg = match bundle.content.get(0).ok_or("Empty bundle")?.clone() {
+            OscPacket::Message(msg) => { Option::Some(msg) }
+            OscPacket::Bundle(_) => {Option::None}
+        }.ok_or("First element in bundle not an info message!")?;
+
+        if first_msg.addr != "/bundle_info" {
+            return Err(format!("Expected /bundle_info as first message in bundle, got: {}", &first_msg.addr));
+        }
+
+        let bundle_tag = first_msg.args.get(0)
+            .ok_or("bundle info empty")?
+            .clone()
+            .string().ok_or("bundle info should be a string")?;
+
+        let contents = if bundle.content.len() > 1 {(&bundle.content[1..].to_vec()).clone()} else {vec![]};
+
+        debug!("Tagged bundle: {}::{:?}", &bundle_tag, contents.clone());
+
+        Ok(TaggedBundle {
+            bundle_tag,
+            contents
+        })
+    }
 }
