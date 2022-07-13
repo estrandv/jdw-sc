@@ -17,7 +17,7 @@ use std::time::Duration;
 use log::{debug, info, LevelFilter, warn};
 use simple_logger::SimpleLogger;
 use crate::osc_client::OSCPoller;
-use crate::osc_model::{PlaySampleMessage, NoteOnTimedMessage, NoteModifyMessage, NoteOnMessage};
+use crate::osc_model::{PlaySampleMessage, NoteOnTimedMessage, NoteModifyMessage, NoteOnMessage, TaggedBundle};
 use crate::samples::SampleDict;
 
 fn main() {
@@ -146,8 +146,6 @@ fn main() {
         fn handle_message(&self, msg: OscMessage) -> Result<(), String> {
             // Handle with result to bring down duplicate code below
 
-            debug!(">> Received OSC message for function/address: {} with args {:?}", msg.addr, msg.args);
-
             if msg.addr == "/note_on_timed" {
 
                 let processed_message = NoteOnTimedMessage::new(msg)?;
@@ -225,9 +223,24 @@ fn main() {
                 }
                 OscPacket::Bundle(bundle) => {
 
-                    // TODO: All incoming bundles will require a bundle_info message to be processed
-
                     debug!("OSC Bundle: {:?}", bundle);
+
+                    match TaggedBundle::new(bundle) {
+                        Ok(tagged_bundle) => {
+                            info!("Parse of bundle successful: {:?}", tagged_bundle);
+
+                            if tagged_bundle.bundle_tag == "batch_send" {
+                                for sub_packet in tagged_bundle.contents {
+                                    debug!("Unpacking: {:?}", sub_packet.clone());
+                                    self.process_osc(sub_packet);
+                                }
+                            }
+
+                        }
+                        Err(e) => {
+                            warn!("{}", e);
+                        }
+                    }
                 }
             }
         }

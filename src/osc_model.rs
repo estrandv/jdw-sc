@@ -1,6 +1,7 @@
 
-// TODO: Structs mainly for standard incoming OSC messages and bundles
-// Idea is to parse it straight into usable data
+/*
+    OSC structs for careful parsing and management of expected message and bundle types.
+ */
 
 use std::any::Any;
 use std::collections::HashMap;
@@ -230,9 +231,10 @@ impl PlaySampleMessage {
         packet in every JDW-compatible bundle is an OSC message with a bundle type
         string contained within, e.g.: ["/bundle_tag", "nrt_record_request"]
  */
+#[derive(Debug)]
 pub struct TaggedBundle {
-    bundle_tag: String,
-    contents: Vec<OscPacket>
+    pub bundle_tag: String,
+    pub contents: Vec<OscPacket>
 }
 
 impl TaggedBundle {
