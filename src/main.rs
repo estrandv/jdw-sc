@@ -14,11 +14,19 @@ use std::cell::RefCell;
 use crate::model::{ProscNoteCreateMessage, ProscNoteModifyMessage, JdwPlayNoteMsg, JdwPlaySampleMsg, JdwSequencerBatchMsg};
 use std::path::Path;
 use std::time::Duration;
+use log::{debug, info, LevelFilter, warn};
+use simple_logger::SimpleLogger;
 use crate::osc_client::OSCPoller;
 use crate::osc_model::{PlaySampleMessage, NoteOnTimedMessage, NoteModifyMessage, NoteOnMessage};
 use crate::samples::SampleDict;
 
 fn main() {
+
+    // Handles all log macros, e.g. "warn!()" to print info in terminal
+    // NOTE: Configurable level is a future want
+    SimpleLogger::new()
+        .with_level(LevelFilter::Debug)
+        .init().unwrap();
 
     /*
         Prepare thread handler for the main supercollider instance
@@ -29,7 +37,7 @@ fn main() {
 
     // Terminate supercollider on ctrl+c
     ctrlc::set_handler(move || {
-        println!("Thread abort requested");
+        info!("Thread abort requested");
         arc_in_ctrlc.lock().unwrap().terminate();
         exit(0);
     }).expect("Error setting Ctrl-C handler");
@@ -41,7 +49,7 @@ fn main() {
     arc.lock().unwrap()
         .wait_for("/init", vec![OscType::String("ok".to_string())], Duration::from_secs(10));
 
-    println!("Server online!");
+    info!("Server online!");
 
     let sc_client = NodeManager::new(arc.clone());
 
@@ -111,7 +119,7 @@ fn main() {
         buffer_handle
     };
 
-    println!("Startup completed, polling for messages ...");
+    info!("Startup completed, polling for messages ...");
 
     loop {
 
@@ -123,7 +131,7 @@ fn main() {
                 main_loop.process_osc(packet);
             }
             Err(e_str) => {
-                println!("{}", &e_str);
+                warn!("{}", &e_str);
             }
         };
 
@@ -139,7 +147,7 @@ fn main() {
         fn handle_message(&self, msg: OscMessage) -> Result<(), String> {
             // Handle with result to bring down duplicate code below
 
-            println!(">> Received OSC message for function/address: {} with args {:?}", msg.addr, msg.args);
+            debug!(">> Received OSC message for function/address: {} with args {:?}", msg.addr, msg.args);
 
             if msg.addr == "/note_on_timed" {
 
@@ -208,11 +216,11 @@ fn main() {
             match packet {
                 OscPacket::Message(msg) => {
 
-                    println!(">> Received OSC message for function/address: {} with args {:?}", msg.addr, msg.args);
+                    debug!(">> Received OSC message for function/address: {} with args {:?}", msg.addr, msg.args);
 
                     match self.handle_message(msg) {
                         Ok(()) => {}
-                        Err(e) => {println!("WARN: {}", e)}
+                        Err(e) => {warn!("{}", e)}
                     };
 
                 }
@@ -220,7 +228,7 @@ fn main() {
 
                     // TODO: All incoming bundles will require a bundle_info message to be processed
 
-                    println!("OSC Bundle: {:?}", bundle);
+                    debug!("OSC Bundle: {:?}", bundle);
                 }
             }
         }

@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::fs;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use log::debug;
 use rosc::OscType;
 use crate::PlaySampleMessage;
 
@@ -232,7 +233,7 @@ impl SampleDict {
                             buffer_nr
                         };
 
-                        println!("Adding sample {} as buf number {}", name, buffer_nr);
+                        debug!("Adding sample {} as buf number {}", name, buffer_nr);
 
                         samples.push(sample.clone());
 

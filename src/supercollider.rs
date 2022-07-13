@@ -7,6 +7,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use std::sync::{Mutex, Arc};
 use std::cell::RefCell;
+use log::{debug, info, warn};
 use regex::{Error, Regex};
 use crate::samples::SampleDict;
 
@@ -129,12 +130,12 @@ impl NodeManager {
                     .map(|note| note.clone())
                     .collect();
 
-                println!("DEBUG: Found {} running notes matching regex {}", matching.len(), external_id_regex);
+                debug!("Found {} running notes matching regex {}", matching.len(), external_id_regex);
 
                 return matching
             }
             Err(_) => {
-                println!("WARN: provided regex {} is invalid", external_id_regex);
+                warn!("Provided regex {} is invalid", external_id_regex);
                 vec![]
             }
         }
@@ -279,7 +280,7 @@ impl Supercollider {
     }
 
     pub fn terminate(&mut self) {
-        println!("Exiting sclang...");
+        info!("Exiting sclang...");
         self.sclang_process.terminate();
     }
 
@@ -305,50 +306,39 @@ impl Supercollider {
 
         let mut buf = [0u8; rosc::decoder::MTU];
 
-        println!(">> Waiting for message with name {} and args {:?} ...", message_name, args);
+        info!(">> Waiting for message with name {} and args {:?} ...", message_name, args);
 
         loop {
 
             match self.osc_socket.recv_from(&mut buf) {
                 Ok((size, addr)) => {
-                    //println!("Received packet with size {} from: {}", size, addr);
                     let (_, packet) = rosc::decoder::decode_udp(&buf[..size]).unwrap();
 
                     match packet {
                         OscPacket::Message(msg) => {
-                            //println!("OSC address: {}", msg.addr);
-                            //println!("OSC arguments: {:?}", msg.args);
 
                             if  msg.addr == message_name && args == msg.args {
-                                println!(">> Awaited message received! Continuing ...");
+                                info!(">> Awaited message received! Continuing ...");
                                 break;
                             } else {
-/*                                println!(
-                                    "Name does not match {} != {} or {:?} != {:?}",
-                                         msg.addr,
-                                         message_name,
-                                         msg.args,
-                                         args
-                                );*/
+                                debug!("Received message not the waited for one, continuing wait...");
                             }
                         }
-                        OscPacket::Bundle(bundle) => {
-                            //println!("OSC Bundle: {:?}", bundle);
-                        }
+                        _ => {}
                     }
                 }
                 Err(e) => {
-                    println!(">> Error receiving from socket: {}", e);
+                    warn!(">> Error receiving from socket: {}", e);
                     break;
                 }
             }
 
             let elapsed = start_time.elapsed();
 
-            println!("Elapsed: {:?}, timeout: {:?}", elapsed.clone(), timeout.clone());
+            debug!("Elapsed: {:?}, timeout: {:?}", elapsed.clone(), timeout.clone());
 
             if elapsed > timeout {
-                println!(">> Timed out waiting for {}", message_name);
+                warn!(">> Timed out waiting for {}", message_name);
                 break;
             }
 
