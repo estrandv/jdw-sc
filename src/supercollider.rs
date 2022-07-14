@@ -108,7 +108,7 @@ impl NodeManager {
         }
     }
 
-    fn create_note(&self, external_id: &str, synth_name: &str, args: Vec<OscType>) -> RunningNote {
+    pub fn create_note(&self, external_id: &str, synth_name: &str, args: Vec<OscType>) -> RunningNote {
 
         // TODO: Creating same external id should naturally wipe the old one - how about retain?
 
@@ -262,6 +262,8 @@ impl Supercollider {
         ).unwrap();
 
         // Note: this port is targeted by start_server.scd
+        // Note: Technically the second UDP in socket managed by the application,
+        // the other being the public in-port used to send messages to jdw-sc
         let recv_addr = match SocketAddrV4::from_str(&config::get_addr(SERVER_OUT_PORT)) {
             Ok(addr) => addr,
             Err(_) => panic!("Error binding incoming osc address"),

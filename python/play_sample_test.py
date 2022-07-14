@@ -10,22 +10,18 @@ def play(index, category, args):
         index, # Index in pack or category
         category, # Category - blank equals none
         # Named args continue from here - see sampler.scd
+        "amp", 2.0
     ] + args)
 
-play(3, "", [])
-time.sleep(0.2)
-play(1, "", [])
-time.sleep(0.2)
-play(2, "", [])
-time.sleep(0.2)
-play(0, "", [])
-play(1, "", [])
-time.sleep(0.2)
+step = 0.2
 
-play(0, "sn", [])
-time.sleep(0.2)
-play(0, "bd", [])
-time.sleep(0.2)
-play(0, "bd", [])
-time.sleep(0.2)
-play(0, "sn", [])
+while True:
+
+    play(1, "", ["amp", 2.5])
+    time.sleep(step)
+    play(1, "", ["ofs", 0.0])
+    time.sleep(step)
+    play(1, "", ["amp", 2.5])
+    time.sleep(step)
+    play(2, "", ["amp", 0.8])
+    time.sleep(step)

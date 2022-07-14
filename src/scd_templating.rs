@@ -5,6 +5,37 @@ use std::path::Path;
 use log::{debug, info};
 use crate::config::{APPLICATION_IP, SERVER_IN_PORT, SERVER_NAME, SERVER_OSC_SOCKET_NAME, SERVER_OUT_PORT, SUPERCOLLIDER_MEMORY_BYTES};
 
+pub fn create_nrt_script(message_scd_rows: Vec<String>) -> Result<String, String> {
+
+    let mut text = fs::read_to_string(Path::new("src/scd/nrt_record.scd"))
+        .map_err(|e| format!("{}", e))?;
+
+    /*
+        Row format:
+        [0.0, [msg...]],
+        [0.0, Buffer.new(...)],
+
+        Buffer example:
+        (Buffer.new(server, 44100 * 8.0, 2, bufnum: 2)).allocReadMsg(File.getcwd +/+ "sample_packs/DR660/DR606 808 Closed Hat 2.wav")
+        - this should be accounted for in to_nrt_scd_row()
+
+        TODO:
+        - Runningnote to scd rows
+            - address, id and args
+            - basically full osc - do we keep address? 
+
+     */
+    let score_row = message_scd_rows.join(";\n");
+
+    text = text.replace("{:bpm}", 128.to_string());
+    text = text.replace("{:file_name}", &SERVER_IN_PORT.to_string());
+    text = text.replace("{:score_rows}", APPLICATION_IP);
+    text = text.replace("{:end_time}", SERVER_NAME);
+
+    Ok(text)
+
+}
+
 pub fn create_boot_script() -> Result<String, String> {
     let mut text = fs::read_to_string(Path::new("src/scd/start_server.scd"))
         .map_err(|e| format!("{}", e))?;
