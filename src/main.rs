@@ -1,3 +1,5 @@
+#![feature(result_flattening)]
+
 mod supercollider;
 mod scd_templating;
 mod samples;

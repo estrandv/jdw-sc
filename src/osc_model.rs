@@ -267,4 +267,47 @@ impl TaggedBundle {
             contents
         })
     }
+
+    fn get_message(&self, content_index: usize) -> Result<OscMessage, String> {
+        self.contents.get(content_index)
+            .map(|pct| pct.clone())
+            .ok_or("Invalid index".to_string())
+            .map(|pct| match pct {
+                OscPacket::Message(msg) => {
+                    Ok(msg)
+                }
+                _ => {Err("Not a message".to_string())}
+            })
+            .flatten()
+    }
+}
+
+/*
+    Timed osc messages are used to delay execution. This has uses both for NRT recording as
+        well as sequencer spacing or timed gate off messages.
+ */
+#[derive(Debug, Clone)]
+pub struct TimedOscMessage {
+    pub time: f32,
+    pub message: OscMessage
+}
+
+impl TimedOscMessage {
+    pub fn from_bundle(bundle: TaggedBundle) -> Result<TimedOscMessage, String>{
+        if &bundle.bundle_tag != "timed_msg" {
+            return Err(format!("Attempted to parse {} as timed_msg bundle", &bundle.bundle_tag));
+        }
+
+        let info_msg = bundle.get_message(0)?;
+        let actual_msg = bundle.get_message(1)?;
+
+        info_msg.expect_addr("/timed_msg")?;
+        let time = info_msg.get_float_at(0, "time")?;
+
+        Ok(TimedOscMessage {
+            time,
+            message: actual_msg
+        })
+
+    }
 }

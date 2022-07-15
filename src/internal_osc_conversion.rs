@@ -8,17 +8,8 @@ use regex::Regex;
 use rosc::{OscMessage, OscType};
 
 use crate::{NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, PlaySampleMessage, SampleDict};
+use crate::osc_model::TimedOscMessage;
 
-/*
-    When converting managed messages into internal supercollider osc there is sometimes the
-        need to order them by requested time of execution, for example to execute the timed
-        gate off message after gate_time or when ordering a score of messages for nrt record.
- */
-#[derive(Debug, Clone)]
-pub struct TimedOscMessage {
-    pub time: f32,
-    pub message: OscMessage
-}
 
 /*
     Created notes often get assigned an external_id from the caller, which
@@ -205,7 +196,6 @@ impl PlaySampleMessage {
         }
     }
 }
-
 
 impl InternalOSCMorpher for PlaySampleInternalMessage {
     fn as_osc(&self, reg: Arc<Mutex<IdRegistry>>) -> Vec<TimedOscMessage> {

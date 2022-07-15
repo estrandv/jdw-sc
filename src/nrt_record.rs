@@ -112,4 +112,45 @@
                             for the <id> registry.
 
 
+            UPDATE:
+                - We now have fully working message conversion with the new method
+                - Registry cleanup is still not done - we can probably hack a timed release
+                    for the specific handling of note_on_timed
+                - Address string reading is still not generified for separate detection in the
+                    nrt bundle. It's only three addresses so far... could be duplicate for all I care
+                - Passing a separate node reg is no problem for the NRT batch conversion
+                    - Pieces are in place!
+                - Some other issues are coming up though:
+                    - Might need to rethink time... is it the responsibility of the caller?
+                        - Non-gate_time messages have no meaningful way to note spacing time,
+                            which is more like the sequencer spacing.
+                    - Main issue is the distinction between "message spacing" and "message delay"
+                        - Our internal timed messages don't affect the timeline:
+                            Two timed gate messages after each other should not wait for each other.
+                            Then again that might not be as tricky as it seems.
+                            [0.0, timed_gate, gt: 0.2] [0.1, timed_gate, gt: 0.1]
+                            [[0.0, s_new][0.2, gate_off][0.1, s_new][0.2, gate_off]]
+                            ... keep adding everything, then sort ...
+                        - Problem, of course, is time increase selectivity
+                            - I believe it is up to each conversion method to interpret what
+                                moves the timeline and what does not
+                            - THere is a built-in difference in format however
+                                -> Bundle arrives with timed nrt messages
+                                -> For each message, use either provided absolute time or
+                                    relative time increase to bump timeline
+                                -> Pass current timeline in when converting each unwrapped message
+                                -> Gate times will be correctly seeded but have no impact
+                        - As such the current setup is a good start!
+                            - We just need a working format for messages that have a time tag
+                                already on arrival
+                            - ... which should ideally be the same standard for sequencer and
+                                nrt to minimize format changes in callers
+                            - ... which means we probably want time to be relative in the timed
+                                messages, but otherwise there is no clashing
+                            - A timed message in turn is... a bundle. Because it contains a message,
+                                which can be anything.
+                            - Timed message struct should thus be placed in the public osc library
+                                and parsable from bundle
+                            - [/bundle_info, "timed_msg"][/timed_msg, 0.0][/s_new...]
+
  */
