@@ -10,13 +10,14 @@ mod internal_osc_conversion;
 use subprocess::{Exec, Redirection, Popen, PopenConfig};
 use std::process::exit;
 use std::sync::{Mutex, Arc};
-use crate::supercollider::{Supercollider, NodeManager};
+use crate::supercollider::{Supercollider};
 use rosc::{OscType, OscMessage, OscPacket};
 use std::cell::RefCell;
 use std::path::Path;
 use std::time::Duration;
 use log::{debug, error, info, LevelFilter, warn};
 use simple_logger::SimpleLogger;
+use crate::internal_osc_conversion::{IdRegistry, InternalOSCMorpher};
 use crate::osc_client::OSCPoller;
 use crate::osc_model::{PlaySampleMessage, NoteOnTimedMessage, NoteModifyMessage, NoteOnMessage, TaggedBundle};
 use crate::samples::SampleDict;
@@ -50,8 +51,6 @@ fn main() {
         .wait_for("/init", vec![OscType::String("ok".to_string())], Duration::from_secs(10));
 
     info!("Server online!");
-
-    let sc_client = NodeManager::new(arc.clone());
 
     /*
         Use the synth definitions from the synths dir to ready custom scd messages.
@@ -98,29 +97,29 @@ fn main() {
 
     ///////////////////////////
 
-    /*
-        Play some welcoming sounds.
-     */
 
-    // Play a default sample to notify the user that samples are live.
-    // Note how an empty arg-array will simply play the first loaded buffer.
-    sc_client.sample_trigger(vec![]);
+    let node_reg = Arc::new(Mutex::new(IdRegistry::new()));
 
-    sc_client.note_on_timed(
-        "default",
-        "initial_testnote",
-        vec![OscType::String("freq".to_string()), OscType::Float(240.0)],
-        0.1
+    // Play a welcoming ping in a really obtuse way.
+    Supercollider::send_timed(arc.clone(),
+        NoteOnTimedMessage::new(OscMessage {
+            addr: "/note_on_timed".to_string(),
+            args: vec![
+                OscType::String("miniBrute".to_string()),
+                OscType::String("miniBrute_launch_ping".to_string()),
+                OscType::Float(0.2),
+                OscType::String("freq".to_string()),
+                OscType::Float(240.0)
+            ]
+        }).unwrap().as_osc(node_reg.clone())
     );
-
-    // Create a thread handle for the main loop.
-    let sc_loop_client = Arc::new(Mutex::new(sc_client));
 
     let mut osc_poller = OSCPoller::new();
 
     let main_loop = MainLoop {
-        sc_loop_client,
-        buffer_handle
+        sc_loop_client: arc,
+        buffer_handle,
+        node_registry: Arc::new(Mutex::new(IdRegistry::new()))
     };
 
     info!("Startup completed, polling for messages ...");
@@ -142,8 +141,9 @@ fn main() {
     }
 
     struct MainLoop {
-        sc_loop_client: Arc<Mutex<NodeManager>>,
+        sc_loop_client: Arc<Mutex<Supercollider>>,
         buffer_handle: Arc<Mutex<SampleDict>>,
+        node_registry: Arc<Mutex<IdRegistry>>,
     }
 
     impl MainLoop {
@@ -154,26 +154,20 @@ fn main() {
             if msg.addr == "/note_on_timed" {
 
                 let processed_message = NoteOnTimedMessage::new(msg)?;
-
-                self.sc_loop_client.lock().unwrap()
-                    .note_on_timed(
-                        &processed_message.synth_name,
-                        &processed_message.external_id,
-                        processed_message.args,
-                        processed_message.gate_time
-                    );
+                Supercollider::send_timed(
+                    self.sc_loop_client.clone(),
+                    processed_message.as_osc(self.node_registry.clone())
+                );
 
                 Ok(())
 
             }
             else if msg.addr == "/note_on" {
                 let processed_message = NoteOnMessage::new(msg)?;
-                self.sc_loop_client.lock().unwrap()
-                    .note_on(
-                        &processed_message.external_id,
-                        &processed_message.synth_name,
-                        processed_message.args,
-                    );
+                Supercollider::send_timed(
+                    self.sc_loop_client.clone(),
+                    processed_message.as_osc(self.node_registry.clone())
+                );
 
                 Ok(())
             }
@@ -183,20 +177,20 @@ fn main() {
                 let internal_msg = processed_message.into_internal(
                     self.buffer_handle.clone()
                 );
-                self.sc_loop_client.lock().unwrap()
-                    .sample_trigger(
-                        // Note how get_arg_vec constructs different args using sample dict data
-                        internal_msg.args
-                    );
+                Supercollider::send_timed(
+                    self.sc_loop_client.clone(),
+                    internal_msg.as_osc(self.node_registry.clone())
+                );
+
                 Ok(())
             }
             else if msg.addr == "/note_modify" {
                 let processed_message = NoteModifyMessage::new(msg)?;
-
-                self.sc_loop_client.lock().unwrap().note_mod(
-                    &processed_message.external_id_regex,
-                    processed_message.args
+                Supercollider::send_timed(
+                    self.sc_loop_client.clone(),
+                    processed_message.as_osc(self.node_registry.clone())
                 );
+
 
                 Ok(())
             }

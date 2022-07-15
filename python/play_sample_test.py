@@ -13,15 +13,15 @@ def play(index, category, args):
         "amp", 2.0
     ] + args)
 
-step = 0.2
+step = 0.25
 
 while True:
 
     play(1, "", ["amp", 2.5])
     time.sleep(step)
-    play(1, "", ["ofs", 0.0])
+    play(1, "", ["ofs", 0.13])
     time.sleep(step)
     play(1, "", ["amp", 2.5])
     time.sleep(step)
-    play(2, "", ["amp", 0.8])
+    play(2, "", ["amp", 0.8, "ofs", 0.05])
     time.sleep(step)

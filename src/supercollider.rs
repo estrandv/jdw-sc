@@ -1,41 +1,32 @@
-use subprocess::{Popen, PopenConfig, Redirection};
-use std::net::{SocketAddrV4, UdpSocket};
-use std::str::FromStr;
-use rosc::{OscPacket, OscTime, OscType, OscMessage, encoder};
 use std::{fs, thread};
-use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
-use std::sync::{Mutex, Arc};
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::Write;
+use std::net::{SocketAddrV4, UdpSocket};
 use std::path::Path;
+use std::str::FromStr;
+use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
+
 use log::{debug, info, warn};
 use regex::{Error, Regex};
+use rosc::{encoder, OscMessage, OscPacket, OscTime, OscType};
+use subprocess::{Popen, PopenConfig, Redirection};
+
 use crate::{config, scd_templating};
 use crate::config::{SC_SERVER_INCOMING_READ_TIMEOUT, SCLANG_IN_PORT, SERVER_IN_PORT, SERVER_OUT_PORT};
+use crate::internal_osc_conversion::TimedOscMessage;
 use crate::samples::SampleDict;
 
-// Representation of a note/"synth" that has been started in supercollider with s_new but not
-// yet removed with gate=0 or similar measure.
-#[derive(Debug, Clone)]
-struct RunningNote {
-    pub synth: String,
-    pub external_id: String,
-    pub args: Vec<OscType>,
-    pub node_id: i32,
-}
-
-impl RunningNote {
-
-    fn get_arg(&self, arg_name: &str) -> Option<OscType> {
-        let pos = self.args.iter().position(|arg| arg.clone() == OscType::String(arg_name.to_string()));
+fn get_arg(args: Vec<OscType>, arg_name: &str) -> Option<OscType> {
+        let pos = args.iter().position(|arg| arg.clone() == OscType::String(arg_name.to_string()));
 
         match pos {
             Some(index) => {
                 let value_pos = index + 1;
 
-                match self.args.get(value_pos) {
+                match args.get(value_pos) {
                     Some(val) => Some(val.clone()),
                     None => None
                 }
@@ -44,195 +35,6 @@ impl RunningNote {
             None => None
         }
 
-    }
-
-    fn to_s_new(&self) -> OscMessage {
-        let mut final_args = vec![
-            OscType::String(self.synth.to_string()),
-            OscType::Int(self.node_id), // NodeID
-            OscType::Int(0), // Group?
-            OscType::Int(0), // Group placement?
-        ];
-
-        final_args.extend(self.args.clone());
-
-        OscMessage {
-            addr: "/s_new".to_string(),
-            args:  final_args
-        }
-    }
-
-    fn to_note_off(&self) -> OscMessage {
-        OscMessage {
-            addr: "/n_set".to_string(),
-            args: vec![
-                OscType::Int(self.node_id), // NodeID
-                OscType::String("gate".to_string()), // Gate is the "note off" signal
-                OscType::Int(0),
-            ]
-        }
-    }
-
-    fn replace_args(&mut self, args: Vec<OscType>) {
-        self.args = args;
-    }
-
-    fn to_note_mod(&self) -> OscMessage {
-
-        let mut final_args = vec![
-            OscType::Int(self.node_id), // NodeID
-        ];
-
-        final_args.extend(self.args.clone());
-
-        OscMessage {
-            addr: "/n_set".to_string(),
-            args: final_args
-        }
-    }
-}
-
-
-pub struct NodeManager {
-    sc_handle: Arc<Mutex<Supercollider>>,
-    current_node_id: RefCell<i32>,
-    running_notes: Vec<RunningNote>,
-}
-
-impl NodeManager {
-    pub fn new(sc_handle: Arc<Mutex<Supercollider>>) -> NodeManager {
-        NodeManager {
-            sc_handle,
-            current_node_id: RefCell::new(100),
-            running_notes: Vec::new(),
-        }
-    }
-
-    pub fn create_note(&self, external_id: &str, synth_name: &str, args: Vec<OscType>) -> RunningNote {
-
-        // TODO: Creating same external id should naturally wipe the old one - how about retain?
-
-        let current_id = self.current_node_id.clone().into_inner();
-        self.current_node_id.replace(current_id + 1);
-
-        RunningNote {
-            synth: synth_name.to_string(),
-            external_id: external_id.to_string(),
-            args,
-            node_id: current_id
-        }
-    }
-
-    fn get_running(&self, external_id_regex: &str) -> Vec<RunningNote> {
-
-        let regex_attempt = Regex::new(external_id_regex);
-
-        match regex_attempt {
-            Ok(regex) => {
-
-                let matching: Vec<_> = self.running_notes.iter()
-                    .filter(|note| regex.is_match(&note.external_id))
-                    .map(|note| note.clone())
-                    .collect();
-
-                debug!("Found {} running notes matching regex {}", matching.len(), external_id_regex);
-
-                return matching
-            }
-            Err(_) => {
-                warn!("Provided regex {} is invalid", external_id_regex);
-                vec![]
-            }
-        }
-
-    }
-
-    fn remove_running(&mut self, external_id: &str) {
-        self.running_notes.retain(|note| note.external_id != external_id);
-    }
-
-    pub fn note_on(&mut self, external_id: &str, synth_name: &str, args: Vec<OscType>) {
-
-        let new_note = self.create_note(
-            external_id,
-            synth_name,
-            args
-        );
-
-        self.running_notes.push(new_note.clone());
-
-        self.sc_handle.lock().unwrap().send_to_server(new_note.to_s_new());
-
-    }
-
-    /*
-        Modify all running notes with an external id matching regex.
-        Note that this function also handles classifying turned off (gate=0) notes
-        as non-running.
-     */
-    pub fn note_mod(&mut self, external_id_regex: &str, args: Vec<OscType>) {
-
-        let running = self.get_running(external_id_regex);
-
-        for mut note in running {
-
-            // Full absolute replace - might want relative eventually
-            note.replace_args(args.clone());
-
-            self.sc_handle.lock().unwrap().send_to_server(note.clone().to_note_mod());
-
-            self.remove_running(&note.external_id);
-
-            // Keep track of note off (gate=0)
-            let gate_arg = note.clone().get_arg("gate");
-            let note_off = match gate_arg {
-                Some(osc_type) => osc_type == OscType::Float(0.0),
-                None => false
-            };
-
-            if !note_off {
-                // Only re-add the modified note if we didn't turn it off
-                self.running_notes.push(note);
-            }
-
-        }
-    }
-
-    // TODO: Never cleaning can result in overflow - consider gate time or detectSilence
-    pub fn sample_trigger(&self, args: Vec<OscType>) {
-
-        let new_note = self.create_note(
-            "sampler_dummy",
-            "sampler",
-            args
-        );
-
-        self.sc_handle.lock().unwrap().send_to_server(new_note.to_s_new());
-
-    }
-
-    pub fn note_on_timed(&self, synth_name: &str, external_id: &str, args: Vec<OscType>, gate_time_sec: f32) {
-
-        let new_note = self.create_note(
-            external_id,
-            synth_name,
-            args
-        );
-
-        self.sc_handle.lock().unwrap().send_to_server(new_note.to_s_new());
-
-        let handle_clone = self.sc_handle.clone();
-        thread::spawn(move || {
-            thread::sleep(Duration::from_secs_f32(gate_time_sec));
-            handle_clone.lock().unwrap().send_to_server(new_note.to_note_off());
-            // TODO: Bit of a lifetime mess here - we actually want to call remove_running or even note_off
-            //  at this point but moving mut self is an issue...
-            // If running notes member is converted to refcell we can cheat the &mut self of remove_running
-            // Also note that we should technically remove it after release time rather than immediately on gate
-            // ... which kinda also means that "rel" arg should be elevated to a message-level arg... but
-            // that is shaky territory.
-        });
-    }
 }
 
 pub struct Supercollider {
@@ -300,6 +102,27 @@ impl Supercollider {
     pub fn terminate(&mut self) {
         info!("Exiting sclang...");
         self.sclang_process.terminate();
+    }
+
+    pub fn send_timed(handle: Arc<Mutex<Supercollider>>, msgs: Vec<TimedOscMessage>) {
+
+        for msg in msgs {
+            if msg.time == 0.0 {
+                handle.lock().unwrap().send_to_server(msg.message);
+            } else {
+                let handle_clone = handle.clone();
+                thread::spawn(move || {
+                    thread::sleep(Duration::from_secs_f32(msg.time));
+                    handle_clone.lock().unwrap().send_to_server(msg.message);
+                    // TODO: Bit of a lifetime mess here - we actually want to call remove_running or even note_off
+                    //  at this point but moving mut self is an issue...
+                    // If running notes member is converted to refcell we can cheat the &mut self of remove_running
+                    // Also note that we should technically remove it after release time rather than immediately on gate
+                    // ... which kinda also means that "rel" arg should be elevated to a message-level arg... but
+                    // that is shaky territory.
+                });
+            }
+        }
     }
 
     pub fn send_to_server(&self, msg: OscMessage) {

@@ -15,7 +15,7 @@ use crate::{NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, PlaySampleMess
         gate off message after gate_time or when ordering a score of messages for nrt record.
  */
 #[derive(Debug, Clone)]
-struct TimedOscMessage {
+pub struct TimedOscMessage {
     pub time: f32,
     pub message: OscMessage
 }
@@ -25,7 +25,7 @@ struct TimedOscMessage {
         is then used to look up the actual nodeId used in the created internal
         supercollider osc message. IdRegistry keeps track of these variables.
  */
-struct IdRegistry {
+pub struct IdRegistry {
     pub registry: RefCell<HashMap<String, i32>>,
     curr_id: RefCell<i32>,
 }
@@ -42,6 +42,7 @@ impl IdRegistry {
 
         let mut new_reg = self.registry.clone().into_inner();
         new_reg.insert(external_id.to_string(), node_id);
+        self.registry.replace(new_reg);
 
         self.curr_id.replace(node_id);
 
@@ -90,7 +91,7 @@ impl IdRegistry {
 
 }
 
-trait InternalOSCMorpher {
+pub trait InternalOSCMorpher {
     fn as_osc(&self, reg: Arc<Mutex<IdRegistry>>) -> Vec<TimedOscMessage>;
     fn as_nrt_osc(&self, reg: Arc<Mutex<IdRegistry>>, start_time: f32) -> Vec<TimedOscMessage> {
         self.as_osc(reg).iter()
