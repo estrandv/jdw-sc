@@ -20,8 +20,8 @@ add_msg("/bundle_info", ["batch_send"])
 
 for i in range(1, 3):
     add_msg("/note_on_timed", [
-        "miniBrute",
-        "miniBrute_TEST_HOLD_" + str(i),
+        "brute",
+        "brute_TEST_HOLD_" + str(i),
         0.2 + (0.2 * i), # gate time
         "freq",
         195.0 + (4.4 * i)

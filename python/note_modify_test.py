@@ -8,8 +8,8 @@ client = udp_client.SimpleUDPClient("127.0.0.1", 13331) # Straight to main appli
 
 # See better explanation of note on parameters in note_on_timed_test.py
 client.send_message("/note_on", [
-    "miniBrute",
-    "miniBrute_MODTEST_1",
+    "gentle",
+    "brute_MODTEST_1",
     "freq",
     444.0,
     "relT",
@@ -25,8 +25,8 @@ client.send_message("/note_on", [
 time.sleep(0.5)
 
 client.send_message("/note_on", [
-    "miniBrute",
-    "miniBrute_MODTEST_2",
+    "brute",
+    "brute_MODTEST_2",
     "freq",
     128.2,
     "prt",
@@ -37,7 +37,7 @@ client.send_message("/note_on", [
 time.sleep(1.0)
 
 client.send_message("/note_modify", [
-    "miniBrute_MODTEST_1", # External id regex - here an exact match for our id
+    "brute_MODTEST_1", # External id regex - here an exact match for our id
     "freq", # Args, same as any note_on message
     380.0,
     "lfoS",
@@ -53,7 +53,7 @@ for i in range(0, 40):
     time.sleep(0.003 * i)
 
     client.send_message("/note_modify", [
-        "miniBrute_MODTEST_2",
+        "brute_MODTEST_2",
         "freq",
         128.2 + (i * 22.0),
         "amp",
@@ -63,7 +63,7 @@ for i in range(0, 40):
 time.sleep(2.0)
 
 client.send_message("/note_modify", [
-    "miniBrute_MODTEST_(.*)", # Here we use a wildcard regex to catch both our created notes
+    "brute_MODTEST_(.*)", # Here we use a wildcard regex to catch both our created notes
     "gate",
     0.0
 ])
@@ -73,7 +73,7 @@ time.sleep(1.0)
 # This should not trigger since the notes should be cleaned after the gate=0
 # Cleanup is in a bit of a flux - this can be a bit shaky
 client.send_message("/note_modify", [
-    "miniBrute_MODTEST_(.*)",
+    "brute_MODTEST_(.*)",
     "gate",
     1.0
 ])

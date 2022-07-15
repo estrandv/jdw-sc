@@ -9,7 +9,7 @@ amp = amp * gain;
 freq = Lag.kr(freq, prt);
 
 /*
-    Actual minibrute has some form of RLPF (resonance/cutoff)
+    Actual brute has some form of RLPF (resonance/cutoff)
     This filter is then applied with adsr
 */
 

@@ -11,8 +11,8 @@ client.send_message("/test", [1, "A string", 1337.0, "/try_this", "whoah"])
 
 # This creates a ringing first tone
 client.send_message("/note_on_timed", [
-    "miniBrute", # SynthDef to use, See scd/synths/miniBrute.scd
-    "miniBrute_TEST_HOLD", # Arbitrary unique external id for the ringing note
+    "gentle", # SynthDef to use, See scd/synths/brute.scd
+    "brute_TEST_HOLD", # Arbitrary unique external id for the ringing note
     6.0, # Gate time ("note off after n sec")
     "freq", # Named args continue from here
     355.0,
@@ -21,7 +21,9 @@ client.send_message("/note_on_timed", [
     "relT",
     3.0,
     "susL",
-    0.7
+    0.7,
+    "lfoD",
+    1.0
 ])
 
 time.sleep(0.5)
@@ -36,26 +38,34 @@ for _ in range(0,14):
         i = 0
 
     client.send_message("/note_on_timed", [
-        "miniBrute",
-        "miniBrute_TEST" + str(i),
+        "brute",
+        "brute_TEST" + str(i),
         0.04,
         "freq",
         arp[i] * 0.8,
         "attT",
         0.08,
         "relT",
-        0.6
+        1.6,
+        "fx",
+        0.0 + ( i * 0.01 )
     ])
     time.sleep(0.2 + (i * 0.05))
     i+=1
 
 for i in range(0, 53):
     client.send_message("/note_on_timed", [
-        "miniBrute",
-        "miniBrute_TEST" + str(i),
+        "brute",
+        "brute_TEST" + str(i),
         0.04,
         "freq",
-        80.0 + (i * 22.0)
+        80.0 + (i * 22.0),
+        "fx",
+        0.03,
+        "relT",
+        2.2,
+        "amp",
+        0.4
     ])
 
     time.sleep(0.02)

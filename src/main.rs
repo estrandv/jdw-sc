@@ -107,9 +107,9 @@ fn main() {
         NoteOnTimedMessage::new(OscMessage {
             addr: "/note_on_timed".to_string(),
             args: vec![
-                OscType::String("miniBrute".to_string()),
-                OscType::String("miniBrute_launch_ping".to_string()),
-                OscType::Float(0.2),
+                OscType::String("gentle".to_string()),
+                OscType::String("launch_ping".to_string()),
+                OscType::Float(0.5),
                 OscType::String("freq".to_string()),
                 OscType::Float(240.0)
             ]
