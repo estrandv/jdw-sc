@@ -10,7 +10,7 @@ use std::fmt::format;
 use rosc::{OscBundle, OscError, OscMessage, OscPacket, OscType};
 use std::option::Option;
 use std::sync::{Arc, Mutex};
-use log::debug;
+use log::{debug, warn};
 use crate::SampleDict;
 
 /*
@@ -109,6 +109,8 @@ pub struct NoteOnTimedMessage {
     pub args: Vec<OscType> // Named args such as "bus" or "rel"
 }
 
+
+// TODO: All these msg: OscMessage calls could use references instead of moves
 impl NoteOnTimedMessage {
     pub fn new(msg: OscMessage) -> Result<NoteOnTimedMessage, String> {
 
@@ -280,11 +282,27 @@ impl TaggedBundle {
             })
             .flatten()
     }
+
+    fn get_bundle(&self, content_index: usize) -> Result<OscBundle, String> {
+        self.contents.get(content_index)
+            .map(|pct| pct.clone())
+            .ok_or("Invalid index".to_string())
+            .map(|pct| match pct {
+                OscPacket::Bundle(msg) => {
+                    Ok(msg)
+                }
+                _ => {Err("Not a bundle".to_string())}
+            })
+            .flatten()
+    }
 }
 
 /*
     Timed osc messages are used to delay execution. This has uses both for NRT recording as
         well as sequencer spacing or timed gate off messages.
+    [/bundle_info, "timed_msg"]
+    [/timed_msg_info, 0.0]
+    [... msg ...]
  */
 #[derive(Debug, Clone)]
 pub struct TimedOscMessage {
@@ -301,12 +319,61 @@ impl TimedOscMessage {
         let info_msg = bundle.get_message(0)?;
         let actual_msg = bundle.get_message(1)?;
 
-        info_msg.expect_addr("/timed_msg")?;
+        info_msg.expect_addr("/timed_msg_info")?;
         let time = info_msg.get_float_at(0, "time")?;
 
         Ok(TimedOscMessage {
             time,
             message: actual_msg
+        })
+
+    }
+}
+
+/*
+    Extracted from a bundle:
+    [/bundle_info, "nrt_record"]
+    [/nrt_record_info, <bpm: 120.0>, <file_name: "myfile.wav">]
+    followed by untagged bundle: all contained timed messages
+ */
+pub struct NRTRecordMessage {
+    pub file_name: String,
+    pub bpm: f32,
+    pub messages: Vec<TimedOscMessage>
+}
+
+impl NRTRecordMessage {
+    pub fn from_bundle(bundle: TaggedBundle) -> Result<NRTRecordMessage, String>{
+        if &bundle.bundle_tag != "nrt_record" {
+            return Err(format!("Attempted to parse {} as nrt_record bundle", &bundle.bundle_tag));
+        }
+
+        let info_msg = bundle.get_message(0)?;
+        let message_bundle = bundle.get_bundle(1)?;
+
+        let timed_messages: Vec<_> = message_bundle.content.iter()
+            .map(|packet| match packet {
+                OscPacket::Bundle(bun) => {
+                    let tagged = TaggedBundle::new(bun.clone())?;
+                    return Ok(TimedOscMessage::from_bundle(tagged)?);
+                }
+                _ => {return Err("Unexpected non-bundle when unpacking timed messages bundle".to_string());}
+            })
+            // TODO: Pref I guess we want to error check properly but cba right now
+            .filter(|m| m.is_ok())
+            .map(|m| m.unwrap())
+            .collect();
+
+        info_msg.expect_addr("/nrt_record_info")?;
+        let bpm = info_msg.get_float_at(0, "bpm")?;
+        let file_name = info_msg.get_string_at(1, "file_name")?;
+
+        // TODO: Messages should probably be processed to convert managed, but I guess
+        // that contains more logic and is another step
+        Ok(NRTRecordMessage {
+            file_name,
+            bpm,
+            messages: timed_messages
         })
 
     }

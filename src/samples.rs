@@ -27,15 +27,6 @@ impl Sample {
         )
     }
 
-    // Buffer load as-osc, suitable for loading into the NRT server
-    pub fn to_nrt_scd_row(&self, dir: &str) -> String {
-        // TODO: TEmplate-friendly pieces
-        format!(
-            "[0.0, (Buffer.new(server, 44100 * 8.0, 2, bufnum: {})).allocReadMsg(File.getcwd +/+ \"{}\")]",
-            dir.to_string() + &self.file_name.to_string(),
-            self.buffer_nr
-        )
-    }
 }
 
 pub struct SamplePack {

@@ -154,3 +154,110 @@
                             - [/bundle_info, "timed_msg"][/timed_msg, 0.0][/s_new...]
 
  */
+
+use std::sync::{Arc, Mutex};
+
+use rosc::OscType;
+
+use crate::{IdRegistry, InternalOSCMorpher, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage, SampleDict};
+use crate::osc_model::TimedOscMessage;
+use crate::samples::Sample;
+
+impl Sample {
+    // Buffer load as-osc, suitable for loading into the NRT server
+    pub fn to_nrt_scd_row(&self, dir: &str) -> String {
+        // TODO: TEmplate-friendly pieces
+        format!(
+            "[0.0, (Buffer.new(server, 44100 * 8.0, 2, bufnum: {})).allocReadMsg(File.getcwd +/+ \"{}\")]",
+            dir.to_string() + &self.file_name.to_string(),
+            self.buffer_nr
+        )
+    }
+}
+
+// TODO: Handle all the unwraps
+
+impl NRTRecordMessage {
+    pub fn get_processed_messages(
+        &self,
+        buffer_handle: Arc<Mutex<SampleDict>>,
+    ) -> Vec<TimedOscMessage> {
+        let registry = IdRegistry::new();
+        let reg_handle = Arc::new(Mutex::new(registry));
+        let mut current_time = 0.0;
+        let mut result_vector: Vec<TimedOscMessage> = Vec::new();
+
+        for msg in &self.messages {
+            current_time += msg.time;
+
+            // Each contained message must first be converted to its internal equivalent
+            let rows =
+                if msg.message.addr == "/note_on_timed" {
+                    let res = NoteOnTimedMessage::new(msg.message.clone());
+                    res.unwrap()
+                        .as_nrt_osc(reg_handle.clone(), current_time)
+                } else if msg.message.addr == "/note_on" {
+                    NoteOnMessage::new(msg.message.clone())
+                        .unwrap()
+                        .as_nrt_osc(reg_handle.clone(), current_time)
+                } else if msg.message.addr == "/play_sample" {
+                    let processed_message = PlaySampleMessage::new(msg.message.clone()).unwrap();
+                    processed_message.into_internal(
+                        buffer_handle.clone()
+                    ).as_nrt_osc(reg_handle.clone(), current_time)
+                } else if msg.message.addr == "/note_modify" {
+                    NoteModifyMessage::new(msg.message.clone())
+                        .unwrap()
+                        .as_nrt_osc(reg_handle.clone(), current_time)
+                } else {
+                    vec![] // TODO: Wrap in some default handler - important part is using current_time
+                };
+
+            current_time += msg.time;
+            result_vector.extend(rows);
+        }
+
+        // Ensure all messages are in order
+        result_vector.sort_by(|a, b| a.time.total_cmp(&b.time));
+
+        result_vector
+    }
+}
+
+impl TimedOscMessage {
+    // Sort of a debug format; display as a string of values: [/s_new, "arg", 2.0, etc.]
+    pub fn as_nrt_row(&self) -> String {
+        let mut row_template = "[{:time},[{:adr},{:args}]]".to_string();
+
+        let args: Vec<_> = self.message.args.iter()
+            .map(|arg| {
+                let ball = match arg {
+                    OscType::Int(val) => {
+                        format!("{}", val)
+                    }
+                    OscType::Float(val) => {
+                        format!("{:.5}", val)
+                    }
+                    OscType::String(val) => {
+                        format!("\"{}\"", val)
+                    }
+                    _ => {
+                        // TODO: Implement everything some day
+                        "err".to_string()
+                    }
+                };
+                ball
+            }).collect();
+
+        row_template = row_template.replace("{:time}", &format!("{:.5}", &self.time));
+        row_template = row_template.replace("{:adr}", &format!("{}", &self.message.addr));
+
+        let arg_string = args.join(",");
+
+        row_template = row_template.replace("{:args}", &arg_string);
+
+        row_template
+
+    }
+}
+

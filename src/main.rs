@@ -21,7 +21,7 @@ use log::{debug, error, info, LevelFilter, warn};
 use simple_logger::SimpleLogger;
 use crate::internal_osc_conversion::{IdRegistry, InternalOSCMorpher};
 use crate::osc_client::OSCPoller;
-use crate::osc_model::{PlaySampleMessage, NoteOnTimedMessage, NoteModifyMessage, NoteOnMessage, TaggedBundle};
+use crate::osc_model::{PlaySampleMessage, NoteOnTimedMessage, NoteModifyMessage, NoteOnMessage, TaggedBundle, NRTRecordMessage};
 use crate::samples::SampleDict;
 
 fn main() {
@@ -238,6 +238,25 @@ fn main() {
                                     debug!("Unpacking: {:?}", sub_packet.clone());
                                     self.process_osc(sub_packet);
                                 }
+                            }
+                            else if tagged_bundle.bundle_tag == "nrt_record" {
+                                let nrt_record_msg = NRTRecordMessage::from_bundle(tagged_bundle);
+
+                                match nrt_record_msg {
+                                    Ok(nrt_record) => {
+                                        let rows = nrt_record.get_processed_messages(
+                                            self.buffer_handle.clone()
+                                        );
+
+                                        let row_chunk: Vec<_> = rows.iter()
+                                            .map(|m| m.as_nrt_row()).collect();
+
+                                        // TODO: You are here. Need to construct the full script.
+                                        println!("NRT ROWS: {}", row_chunk.join(", "));
+                                    }
+                                    Err(e) => {warn!("{}", e)}
+                                }
+
                             }
 
                         }
