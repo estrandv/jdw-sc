@@ -5,6 +5,7 @@ mod osc_model;
 mod osc_client;
 mod nrt_record;
 mod config;
+mod internal_osc_conversion;
 
 use subprocess::{Exec, Redirection, Popen, PopenConfig};
 use std::process::exit;
@@ -179,10 +180,13 @@ fn main() {
             else if msg.addr == "/play_sample" {
 
                 let processed_message = PlaySampleMessage::new(msg)?;
+                let internal_msg = processed_message.into_internal(
+                    self.buffer_handle.clone()
+                );
                 self.sc_loop_client.lock().unwrap()
                     .sample_trigger(
                         // Note how get_arg_vec constructs different args using sample dict data
-                        processed_message.get_args_with_buf(self.buffer_handle.clone())
+                        internal_msg.args
                     );
                 Ok(())
             }

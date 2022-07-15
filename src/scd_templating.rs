@@ -27,7 +27,9 @@ pub fn create_nrt_script(message_scd_rows: Vec<String>) -> Result<String, String
      */
     let score_row = message_scd_rows.join(";\n");
 
-    text = text.replace("{:bpm}", 128.to_string());
+    // TODO: Problem. Managed messages arrive without bpm with times in seconds.
+    //  Maybe they shouldn't? Conversion is not expensive.
+    text = text.replace("{:bpm}", "128");
     text = text.replace("{:file_name}", &SERVER_IN_PORT.to_string());
     text = text.replace("{:score_rows}", APPLICATION_IP);
     text = text.replace("{:end_time}", SERVER_NAME);
