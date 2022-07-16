@@ -15,21 +15,6 @@ pub fn create_nrt_script(
     let mut text = fs::read_to_string(Path::new("src/scd/nrt_record.scd"))
         .map_err(|e| format!("{}", e))?;
 
-    /*
-        Row format:
-        [0.0, [msg...]],
-        [0.0, Buffer.new(...)],
-
-        Buffer example:
-        (Buffer.new(server, 44100 * 8.0, 2, bufnum: 2)).allocReadMsg(File.getcwd +/+ "sample_packs/DR660/DR606 808 Closed Hat 2.wav")
-        - this should be accounted for in to_nrt_scd_row()
-
-        TODO:
-        - Runningnote to scd rows
-            - address, id and args
-            - basically full osc - do we keep address? 
-
-     */
     let score_row = message_scd_rows.join(",\n");
 
     // TODO: Problem. Managed messages arrive without bpm with times in seconds.
@@ -76,10 +61,6 @@ pub fn read_all_synths(operation: &str) -> Vec<String> {
 
         debug!("Reading: {}", file_name.clone());
 
-        // Add a postln to the end so that we see a confirmation message in console.
-        // TODO: Cute idea, but breaks nrt record among other things. Fetch elsewhere.
-        //let with_load_msg = text + &format!("\n\"{} loaded.\".postln;", file_name);
-
         result.push(text);
 
     }
@@ -90,5 +71,8 @@ pub fn read_all_synths(operation: &str) -> Vec<String> {
 
 // Take synthdef code and wrap it in an nrt score line
 pub fn nrt_wrap_synthdef(def_code: &str) -> String {
+    // NOTE: Supercollider documentation recommends the writeDefFile method for larger
+    // synthDefs. Since we have no control over how large a synthDef any user can create,
+    // it is probably best long term to change the method into writing to temp synthDef files.
     format!("[0.0, ['/d_recv', {}]]", def_code)
 }

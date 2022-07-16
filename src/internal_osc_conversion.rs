@@ -186,12 +186,19 @@ impl PlaySampleMessage {
             .get_buffer_number(&self.sample_pack, self.index, self.category.clone())
             .unwrap_or(0); // Should probably be some kind of error, but for now default to base buf
 
-        // TODO: Buf might already be in it. Might be good to wipe it.
+
+        if base_args.iter()
+            .map(|arg| arg.clone())
+            .find(|arg| arg.clone().string().is_some_and(|a| a == "buf"))
+            .is_some() {
+            warn!("Sample play request contained a preset arg for 'buf' which can impact sample playback.");
+        }
+
         base_args.push(OscType::String("buf".to_string()));
         base_args.push(OscType::Int(buf_nr));
 
         PlaySampleInternalMessage {
-            external_id: "Dummy123Sample".to_string(),
+            external_id: self.external_id,
             args: base_args
         }
     }

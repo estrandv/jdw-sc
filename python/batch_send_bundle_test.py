@@ -27,7 +27,7 @@ for i in range(1, 3):
         195.0 + (4.4 * i)
     ])
 
-add_msg("/play_sample", ["example", 1, ""])
+add_msg("/play_sample", ["example_id_lol", "example", 1, ""])
 
 # Should work
 client.send(bundle.build())

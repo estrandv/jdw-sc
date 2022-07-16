@@ -1,4 +1,5 @@
 #![feature(result_flattening)]
+#![feature(is_some_with)]
 
 mod supercollider;
 mod scd_templating;
@@ -105,7 +106,7 @@ fn main() {
 
     // Play a welcoming ping in a really obtuse way.
     Supercollider::send_timed(arc.clone(),
-        NoteOnTimedMessage::new(OscMessage {
+        NoteOnTimedMessage::new(&OscMessage {
             addr: "/note_on_timed".to_string(),
             args: vec![
                 OscType::String("gentle".to_string()),
@@ -156,7 +157,7 @@ fn main() {
 
             if msg.addr == "/note_on_timed" {
 
-                let processed_message = NoteOnTimedMessage::new(msg)?;
+                let processed_message = NoteOnTimedMessage::new(&msg)?;
                 Supercollider::send_timed(
                     self.sc_loop_client.clone(),
                     processed_message.as_osc(self.node_registry.clone())
@@ -166,7 +167,7 @@ fn main() {
 
             }
             else if msg.addr == "/note_on" {
-                let processed_message = NoteOnMessage::new(msg)?;
+                let processed_message = NoteOnMessage::new(&msg)?;
                 Supercollider::send_timed(
                     self.sc_loop_client.clone(),
                     processed_message.as_osc(self.node_registry.clone())
@@ -176,7 +177,7 @@ fn main() {
             }
             else if msg.addr == "/play_sample" {
 
-                let processed_message = PlaySampleMessage::new(msg)?;
+                let processed_message = PlaySampleMessage::new(&msg)?;
                 let internal_msg = processed_message.into_internal(
                     self.buffer_handle.clone()
                 );
@@ -188,7 +189,7 @@ fn main() {
                 Ok(())
             }
             else if msg.addr == "/note_modify" {
-                let processed_message = NoteModifyMessage::new(msg)?;
+                let processed_message = NoteModifyMessage::new(&msg)?;
                 Supercollider::send_timed(
                     self.sc_loop_client.clone(),
                     processed_message.as_osc(self.node_registry.clone())
@@ -230,7 +231,7 @@ fn main() {
 
                     debug!("OSC Bundle: {:?}", bundle);
 
-                    match TaggedBundle::new(bundle) {
+                    match TaggedBundle::new(&bundle) {
                         Ok(tagged_bundle) => {
                             info!("Parse of bundle successful: {:?}", tagged_bundle);
 
@@ -272,18 +273,9 @@ fn main() {
                                         let full_nrt = create_nrt_script(
                                             nrt_record.bpm,
                                             &nrt_record.file_name,
-                                            400.0, // todo: calculate
+                                            400.0, // todo: hard to calculate without gate/release, better to provide
                                             all_nrt_rows
                                         );
-
-                                        /*
-                                            TODO: SYnthdefs
-                                            - Old solution just wrote them into a defs folder which loads on boot
-                                            - There was also the writeDefFile operation outlined in example.scd
-                                            - According to the guide this is the safest way to do it since large scd scripts
-                                                might hit a limit for server read.
-                                            - ALSO: ALl of this is a mess. We need to streamline for a bit.
-                                         */
 
                                         let nrt_result = full_nrt.unwrap();
                                         //println!("NRT\n\n: {}", &nrt_result);

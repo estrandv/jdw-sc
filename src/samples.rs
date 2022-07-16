@@ -50,7 +50,6 @@ impl SamplePack {
         script.to_string()
     }
 
-    // TODO: Move to appropriate file
     pub fn to_nrt_buffer_load_rows(&self) -> Vec<String> {
         let dir = self.dir_path.to_str().unwrap();
 
@@ -86,7 +85,7 @@ impl SamplePack {
     }
 }
 
-// TODO: Can be in generic util.rs
+// NOTE: Should prob be moved to generic util.rs
 pub struct Counter {
     value: i32
 }
@@ -214,7 +213,8 @@ impl SampleDict {
         result
     }
 
-    // TODO: Appropriate file
+    // NOTE: Belonging of all conversion methods is a bit unclear.
+    // For now they work here, but ideally samples should not care for neither nrt nor buffer scd strings
     pub fn to_nrt_buffer_load_rows(&self) -> Vec<String> {
         self.sample_packs.values()
             .flat_map(|pack| pack.to_nrt_buffer_load_rows())

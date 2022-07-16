@@ -193,20 +193,20 @@ impl NRTRecordMessage {
             // Each contained message must first be converted to its internal equivalent
             let rows =
                 if msg.message.addr == "/note_on_timed" {
-                    let res = NoteOnTimedMessage::new(msg.message.clone());
+                    let res = NoteOnTimedMessage::new(&msg.message.clone());
                     res.unwrap()
                         .as_nrt_osc(reg_handle.clone(), current_time)
                 } else if msg.message.addr == "/note_on" {
-                    NoteOnMessage::new(msg.message.clone())
+                    NoteOnMessage::new(&msg.message)
                         .unwrap()
                         .as_nrt_osc(reg_handle.clone(), current_time)
                 } else if msg.message.addr == "/play_sample" {
-                    let processed_message = PlaySampleMessage::new(msg.message.clone()).unwrap();
+                    let processed_message = PlaySampleMessage::new(&msg.message).unwrap();
                     processed_message.into_internal(
                         buffer_handle.clone()
                     ).as_nrt_osc(reg_handle.clone(), current_time)
                 } else if msg.message.addr == "/note_modify" {
-                    NoteModifyMessage::new(msg.message.clone())
+                    NoteModifyMessage::new(&msg.message)
                         .unwrap()
                         .as_nrt_osc(reg_handle.clone(), current_time)
                 } else {

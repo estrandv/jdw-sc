@@ -110,9 +110,8 @@ pub struct NoteOnTimedMessage {
 }
 
 
-// TODO: All these msg: OscMessage calls could use references instead of moves
 impl NoteOnTimedMessage {
-    pub fn new(msg: OscMessage) -> Result<NoteOnTimedMessage, String> {
+    pub fn new(msg: &OscMessage) -> Result<NoteOnTimedMessage, String> {
 
         msg.expect_addr("/note_on_timed")?;
         msg.expect_args(3)?;
@@ -135,10 +134,6 @@ impl NoteOnTimedMessage {
         })
     }
 
-    // TODO: Note differences with supercollider.rs - typically you need access to e.g. running notes
-    // in order to construct the actual osc args for s_new or n_set (since they are indices).
-    // It is probably best to keep the old parts intact and use the data from these messages as base for func calls.
-
 }
 
 // ProscNoteCreateMessage
@@ -150,7 +145,7 @@ pub struct NoteOnMessage {
 }
 
 impl NoteOnMessage {
-    pub fn new (msg: OscMessage) -> Result<NoteOnMessage, String> {
+    pub fn new (msg: &OscMessage) -> Result<NoteOnMessage, String> {
         msg.expect_args(2)?;
 
         let synth_name = msg.get_string_at(0, "synth name")?;
@@ -158,8 +153,6 @@ impl NoteOnMessage {
 
         let named_args = if msg.args.len() > 2 {(&msg.args[2..].to_vec()).clone()} else {vec![]};
         validate_args(&named_args)?;
-
-        // TODO: Ensure even number of named args and that they conform to str,double pattern
 
         Ok(NoteOnMessage {
             synth_name,
@@ -178,7 +171,7 @@ pub struct NoteModifyMessage {
 }
 
 impl NoteModifyMessage {
-    pub fn new(message: OscMessage) -> Result<NoteModifyMessage, String> {
+    pub fn new(message: &OscMessage) -> Result<NoteModifyMessage, String> {
 
         message.expect_args(2)?;
 
@@ -196,8 +189,9 @@ impl NoteModifyMessage {
 }
 
 // Example below of args in order with "" as category (= Empty)
-// ["/play_sample", "example", 2, "", "arg1", 0.2, "arg2", 0.4, ...]
+// ["/play_sample", "my_unique_id", "example", 2, "", "arg1", 0.2, "arg2", 0.4, ...]
 pub struct PlaySampleMessage {
+    pub external_id: String,
     pub sample_pack: String, // The parent dir of the sample file
     pub index: usize, // Sample number - either as plain order in dir or in a given category
     pub category: Option<String>, // TODO: Arbitrary string codes... is there a better way?
@@ -205,23 +199,25 @@ pub struct PlaySampleMessage {
 }
 
 impl PlaySampleMessage {
-    pub fn new(message: OscMessage) -> Result<PlaySampleMessage, String> {
+    pub fn new(message: &OscMessage) -> Result<PlaySampleMessage, String> {
 
-        message.expect_args(3)?;
+        message.expect_args(4)?;
 
-        let sample_pack = message.get_string_at(0, "sample_pack")?;
-        let index = message.get_int_at(1, "index")?;
+        let external_id = message.get_string_at(0, "external_id")?;
+        let sample_pack = message.get_string_at(1, "sample_pack")?;
+        let index = message.get_int_at(2, "index")?;
 
         if index < 0 {
             return Err("Index arg in sample message incompatible: negative".to_string());
         }
 
-        let cat_arg = message.get_string_at(2, "category")?;
+        let cat_arg = message.get_string_at(3, "category")?;
         let category = if cat_arg == "".to_string() {None} else {Some(cat_arg)};
-        let args = if message.args.len() > 3 {(&message.args[3..].to_vec()).clone()} else {vec![]};
+        let args = if message.args.len() > 4 {(&message.args[4..].to_vec()).clone()} else {vec![]};
         validate_args(&args)?;
 
         Ok(PlaySampleMessage {
+            external_id,
             sample_pack,
             index: index as usize,
             category,
@@ -245,7 +241,7 @@ pub struct TaggedBundle {
 }
 
 impl TaggedBundle {
-    pub fn new(bundle: OscBundle) -> Result<TaggedBundle, String> {
+    pub fn new(bundle: &OscBundle) -> Result<TaggedBundle, String> {
         let first_msg = match bundle.content.get(0).ok_or("Empty bundle")?.clone() {
             OscPacket::Message(msg) => { Option::Some(msg) }
             OscPacket::Bundle(_) => {Option::None}
@@ -354,7 +350,7 @@ impl NRTRecordMessage {
         let timed_messages: Vec<_> = message_bundle.content.iter()
             .map(|packet| match packet {
                 OscPacket::Bundle(bun) => {
-                    let tagged = TaggedBundle::new(bun.clone())?;
+                    let tagged = TaggedBundle::new(&bun)?;
                     return Ok(TimedOscMessage::from_bundle(tagged)?);
                 }
                 _ => {return Err("Unexpected non-bundle when unpacking timed messages bundle".to_string());}
@@ -368,8 +364,6 @@ impl NRTRecordMessage {
         let bpm = info_msg.get_float_at(0, "bpm")?;
         let file_name = info_msg.get_string_at(1, "file_name")?;
 
-        // TODO: Messages should probably be processed to convert managed, but I guess
-        // that contains more logic and is another step
         Ok(NRTRecordMessage {
             file_name,
             bpm,
