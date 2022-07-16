@@ -1,16 +1,20 @@
 # Supercollider Wrapper
-This is a wrapper application to manage a running instance of Supercollider server
-	and sclang by forwarding and interpreting OSC messages. 
-The main purposes of the project are as follows:
-	1. Manage the lifecycle of and OSC-communication with the Supercollider and sclang processes
-	2. Provide streamlined helper functions to simplify usage of more obtuse supercollider OSC functionality
-		- e.g. s_new with timed sustain, NRT recording, sample playing by name/category, n_set
-			based on external id tags provided via OSC
-	3. Simplify the usage of Supercollider as a regular music instrument through:
-		- A streamlined way to define synths for easy playing of and modification of single notes via OSC
-        - A streamlined way to define sample packs and play them using OSC
-		- A carefully structured and commented open source codebase
-			- Including example scripts for calling all custom functions
+This application manages a running instance of Supercollider (sclang, scsynth). OSC messages
+	sent to its in-port will be forwarded to scsynth.
+
+In order to enable more complete control over Supercollider it also provides custom functionality
+	such as:	
+	- A preloaded directory of user-defined synthdefs for easy synth creation
+	- A predefined structure for creating buffer-playable sample-packs as directories of samples
+	- A node_id registry based on OSC-provided external ids, allowing e.g. changing of playing synth args without
+		knowing nodeId
+	- Functions for playing samples by name, note_on with timed note_off, streamlined NRT recording,
+		and more. 
+
+The general aim is to provide easier ways to interact with Supercollider via OSC, for example
+	when wanting to utilize core sclang functionality to create custom instruments or samplers.
+
+Examples for calling all custom functions (via python) are provided in the "python" directory.
 
 # Notable "hacks" to keep track of
 - Important scd synth args
