@@ -14,15 +14,22 @@ def play(index, category, args):
         "amp", 2.0
     ] + args)
 
-step = 0.2
+step = 0.4
+short = step / 2.0
 
-while True:
-
-    play(1, "", ["amp", 2.5])
-    time.sleep(step)
-    play(1, "", ["ofs", 0.13])
-    time.sleep(step)
-    play(1, "", ["amp", 2.5])
-    time.sleep(step)
-    play(2, "", ["amp", 0.8, "ofs", 0.05])
-    time.sleep(step)
+play(0, "bd", ["amp", 2.5])
+time.sleep(step)
+play(0, "sn", ["ofs", 0.13])
+time.sleep(step)
+play(0, "bd", ["amp", 2.5])
+time.sleep(short)
+play(0, "bd", ["amp", 0.8, "ofs", 0.05])
+time.sleep(short)
+play(0, "to", ["amp", 2.5])
+play(0, "sn", ["ofs", 0.13])
+time.sleep(short)
+play(0, "sn", ["ofs", 0.13])
+time.sleep(short / 2)
+play(0, "sn", ["ofs", 0.13])
+time.sleep(short / 2)
+play(0, "cy", ["ofs", 0.03, "sus", 2.0])
