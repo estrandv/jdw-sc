@@ -23,6 +23,7 @@ use crate::internal_osc_conversion::{IdRegistry, InternalOSCMorpher};
 use crate::osc_client::OSCPoller;
 use crate::osc_model::{PlaySampleMessage, NoteOnTimedMessage, NoteModifyMessage, NoteOnMessage, TaggedBundle, NRTRecordMessage};
 use crate::samples::SampleDict;
+use crate::scd_templating::create_nrt_script;
 
 fn main() {
 
@@ -58,7 +59,7 @@ fn main() {
         Use the synth definitions from the synths dir to ready custom scd messages.
         The messages then create these synthdefs on the server using the sclang client.
      */
-    let synth_defs = scd_templating::read_all_synths("add");
+    let synth_defs = scd_templating::read_all_synths("add;");
 
     // See start_server.scd for the /read_scd definition
     for def in synth_defs {
@@ -251,8 +252,57 @@ fn main() {
                                         let row_chunk: Vec<_> = rows.iter()
                                             .map(|m| m.as_nrt_row()).collect();
 
-                                        // TODO: You are here. Need to construct the full script.
-                                        println!("NRT ROWS: {}", row_chunk.join(", "));
+                                        let buffer_load_row_chunk = self.buffer_handle
+                                            .lock()
+                                            .unwrap()
+                                            .to_nrt_buffer_load_rows();
+
+
+                                        let synthdefs = scd_templating::read_all_synths("asBytes");
+
+                                        let synth_rows: Vec<_> = synthdefs.iter()
+                                            .map(|def | {return scd_templating::nrt_wrap_synthdef(def)})
+                                            .collect();
+
+                                        let mut all_nrt_rows: Vec<String> = vec![];
+                                        all_nrt_rows.extend(buffer_load_row_chunk);
+                                        all_nrt_rows.extend(synth_rows);
+                                        all_nrt_rows.extend(row_chunk);
+
+                                        let full_nrt = create_nrt_script(
+                                            nrt_record.bpm,
+                                            &nrt_record.file_name,
+                                            400.0, // todo: calculate
+                                            all_nrt_rows
+                                        );
+
+                                        /*
+                                            TODO: SYnthdefs
+                                            - Old solution just wrote them into a defs folder which loads on boot
+                                            - There was also the writeDefFile operation outlined in example.scd
+                                            - According to the guide this is the safest way to do it since large scd scripts
+                                                might hit a limit for server read.
+                                            - ALSO: ALl of this is a mess. We need to streamline for a bit.
+                                         */
+
+                                        let nrt_result = full_nrt.unwrap();
+                                        //println!("NRT\n\n: {}", &nrt_result);
+
+
+                                        self.sc_loop_client.lock().unwrap().send_to_client(
+                                            OscMessage {
+                                                addr: "/read_scd".to_string(),
+                                                args:  vec![OscType::String(nrt_result)]
+                                            }
+                                        );
+
+                                        // TODO: waiting works but is of course disruptive
+                                        // What we do want eventually however is some kind of
+                                        // "execute on message" that sends out a message to the
+                                        // router that the file is created and exists at a path
+                                        self.sc_loop_client.lock().unwrap()
+                                            .wait_for("/nrt_done", vec![OscType::String("ok".to_string())], Duration::from_secs(10));
+
                                     }
                                     Err(e) => {warn!("{}", e)}
                                 }

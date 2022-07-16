@@ -6,4 +6,4 @@ SynthDef("{:synth_name}", { |bus = 0, start = 0, sus = 10, amp = 1, rate = 1, bu
     osc = Mix(osc);
     osc = Pan2.ar(osc, pan);
 	Out.ar(bus, osc)
-}).{:operation};
+}).{:operation}

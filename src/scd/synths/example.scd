@@ -10,7 +10,10 @@ osc = Saw.ar(freq: freq, mul: amp, add: 0.0);
 // Mono to stereo
 osc = Mix(osc) * 0.5;
 
-Out.ar(bus, osc)}).{:operation};
-
 // Note: {:word} format is not sclang but an arbitrary templating format used for placeholders
 // See: synth_templates.rs
+
+// Also note that entering anything (even comments) after the operation keyword can mess with
+// the nrt interpreter
+Out.ar(bus, osc)}).{:operation}
+

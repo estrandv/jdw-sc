@@ -68,4 +68,5 @@ snd = Mix(snd) * 0.5;
 // Panning
 snd = Pan2.ar(snd, pan);
 
-Out.ar(bus, snd)}).{:operation}; // writeDefFile("synthdefs") or add
+// writeDefFile("synthdefs") or add or similar
+Out.ar(bus, snd)}).{:operation}

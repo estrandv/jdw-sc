@@ -169,8 +169,8 @@ impl Sample {
         // TODO: TEmplate-friendly pieces
         format!(
             "[0.0, (Buffer.new(server, 44100 * 8.0, 2, bufnum: {})).allocReadMsg(File.getcwd +/+ \"{}\")]",
-            dir.to_string() + &self.file_name.to_string(),
-            self.buffer_nr
+            self.buffer_nr,
+            dir.to_string() + "/" + &self.file_name.to_string(),
         )
     }
 }
@@ -227,7 +227,7 @@ impl NRTRecordMessage {
 impl TimedOscMessage {
     // Sort of a debug format; display as a string of values: [/s_new, "arg", 2.0, etc.]
     pub fn as_nrt_row(&self) -> String {
-        let mut row_template = "[{:time},[{:adr},{:args}]]".to_string();
+        let mut row_template = "[ {:time}, [\"{:adr}\",{:args}] ]".to_string();
 
         let args: Vec<_> = self.message.args.iter()
             .map(|arg| {

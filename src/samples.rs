@@ -50,6 +50,15 @@ impl SamplePack {
         script.to_string()
     }
 
+    // TODO: Move to appropriate file
+    pub fn to_nrt_buffer_load_rows(&self) -> Vec<String> {
+        let dir = self.dir_path.to_str().unwrap();
+
+        self.samples.iter()
+            .map(|s|s.to_nrt_scd_row(dir))
+            .collect()
+    }
+
     pub fn get_buffer_number(&self, number: usize, category: Option<String>) -> i32 {
 
         if category.is_some() {
@@ -203,6 +212,13 @@ impl SampleDict {
         let vector = vec.iter().map(|pack| pack.to_buffer_load_scd()).collect::<Vec<String>>();
         let result = vector.join("\n") + "\n" + SERVER_OSC_SOCKET_NAME + ".sendMsg(\"/buffers_loaded\", \"ok\");";
         result
+    }
+
+    // TODO: Appropriate file
+    pub fn to_nrt_buffer_load_rows(&self) -> Vec<String> {
+        self.sample_packs.values()
+            .flat_map(|pack| pack.to_nrt_buffer_load_rows())
+            .collect()
     }
 
     pub fn from_dir(dir: &Path) -> Result<SampleDict, String> {

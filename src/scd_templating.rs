@@ -5,7 +5,12 @@ use std::path::Path;
 use log::{debug, info};
 use crate::config::{APPLICATION_IP, SERVER_IN_PORT, SERVER_NAME, SERVER_OSC_SOCKET_NAME, SERVER_OUT_PORT, SUPERCOLLIDER_MEMORY_BYTES};
 
-pub fn create_nrt_script(message_scd_rows: Vec<String>) -> Result<String, String> {
+pub fn create_nrt_script(
+    bpm: f32,
+    file_name: &str,
+    end_time: f32,
+    message_scd_rows: Vec<String>
+) -> Result<String, String> {
 
     let mut text = fs::read_to_string(Path::new("src/scd/nrt_record.scd"))
         .map_err(|e| format!("{}", e))?;
@@ -25,14 +30,14 @@ pub fn create_nrt_script(message_scd_rows: Vec<String>) -> Result<String, String
             - basically full osc - do we keep address? 
 
      */
-    let score_row = message_scd_rows.join(";\n");
+    let score_row = message_scd_rows.join(",\n");
 
     // TODO: Problem. Managed messages arrive without bpm with times in seconds.
     //  Maybe they shouldn't? Conversion is not expensive.
-    text = text.replace("{:bpm}", "128");
-    text = text.replace("{:file_name}", &SERVER_IN_PORT.to_string());
-    text = text.replace("{:score_rows}", APPLICATION_IP);
-    text = text.replace("{:end_time}", SERVER_NAME);
+    text = text.replace("{:bpm}", &format!("{}", bpm));
+    text = text.replace("{:file_name}", file_name);
+    text = text.replace("{:score_rows}", &score_row);
+    text = text.replace("{:end_time}", &format!("{}", end_time));
 
     Ok(text)
 
@@ -72,12 +77,18 @@ pub fn read_all_synths(operation: &str) -> Vec<String> {
         debug!("Reading: {}", file_name.clone());
 
         // Add a postln to the end so that we see a confirmation message in console.
-        let with_load_msg = text + &format!("\n\"{} loaded.\".postln;", file_name);
+        // TODO: Cute idea, but breaks nrt record among other things. Fetch elsewhere.
+        //let with_load_msg = text + &format!("\n\"{} loaded.\".postln;", file_name);
 
-        result.push(with_load_msg);
+        result.push(text);
 
     }
 
     result
 
+}
+
+// Take synthdef code and wrap it in an nrt score line
+pub fn nrt_wrap_synthdef(def_code: &str) -> String {
+    format!("[0.0, ['/d_recv', {}]]", def_code)
 }

@@ -35,4 +35,4 @@ snd=LPF.ar(snd, lpf);
 // Panning
 snd = Pan2.ar(snd, pan);
 
-Out.ar(bus, snd)}).{:operation};
+Out.ar(bus, snd)}).{:operation}
