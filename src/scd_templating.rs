@@ -23,6 +23,7 @@ pub fn create_nrt_script(
     text = text.replace("{:file_name}", file_name);
     text = text.replace("{:score_rows}", &score_row);
     text = text.replace("{:end_time}", &format!("{}", end_time));
+    text = text.replace("{:out_socket_name}", SERVER_OSC_SOCKET_NAME);
 
     Ok(text)
 

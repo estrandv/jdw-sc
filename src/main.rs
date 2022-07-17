@@ -246,40 +246,12 @@ fn main() {
 
                                 match nrt_record_msg {
                                     Ok(nrt_record) => {
-                                        let rows = nrt_record.get_processed_messages(
-                                            self.buffer_handle.clone()
-                                        );
 
-                                        let row_chunk: Vec<_> = rows.iter()
-                                            .map(|m| m.as_nrt_row()).collect();
+                                        let nrt_result = nrt_record::get_nrt_record_scd(
+                                            &nrt_record, self.buffer_handle.clone()
+                                        ).unwrap();
 
-                                        let buffer_load_row_chunk = self.buffer_handle
-                                            .lock()
-                                            .unwrap()
-                                            .to_nrt_buffer_load_rows();
-
-
-                                        let synthdefs = scd_templating::read_all_synths("asBytes");
-
-                                        let synth_rows: Vec<_> = synthdefs.iter()
-                                            .map(|def | {return scd_templating::nrt_wrap_synthdef(def)})
-                                            .collect();
-
-                                        let mut all_nrt_rows: Vec<String> = vec![];
-                                        all_nrt_rows.extend(buffer_load_row_chunk);
-                                        all_nrt_rows.extend(synth_rows);
-                                        all_nrt_rows.extend(row_chunk);
-
-                                        let full_nrt = create_nrt_script(
-                                            nrt_record.bpm,
-                                            &nrt_record.file_name,
-                                            400.0, // todo: hard to calculate without gate/release, better to provide
-                                            all_nrt_rows
-                                        );
-
-                                        let nrt_result = full_nrt.unwrap();
                                         //println!("NRT\n\n: {}", &nrt_result);
-
 
                                         self.sc_loop_client.lock().unwrap().send_to_client(
                                             OscMessage {
@@ -289,21 +261,27 @@ fn main() {
                                         );
 
                                         // TODO: waiting works but is of course disruptive
+                                        // (Tested: it is.)
                                         // What we do want eventually however is some kind of
                                         // "execute on message" that sends out a message to the
                                         // router that the file is created and exists at a path
-                                        self.sc_loop_client.lock().unwrap()
-                                            .wait_for("/nrt_done", vec![OscType::String("ok".to_string())], Duration::from_secs(10));
+
+                                        //self.sc_loop_client.lock().unwrap()
+                                        //    .wait_for("/nrt_done", vec![OscType::String("ok".to_string())], Duration::from_secs(10));
 
                                     }
                                     Err(e) => {warn!("{}", e)}
                                 }
 
+                            } else {
+                                warn!("Unknown tagged bundle received, ignoring...");
                             }
 
                         }
                         Err(e) => {
-                            warn!("{}", e);
+                            // NOTE: Raw bundles should technically be passed straight to
+                            // scsynth or parsed recursively
+                            warn!("Failed to parse passe bundle into a tagged bundle {}", e);
                         }
                     }
                 }

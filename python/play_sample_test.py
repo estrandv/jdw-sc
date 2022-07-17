@@ -9,17 +9,15 @@ def play(index, category, args):
         "test_sample_id", # External id for n_set reference
         "example", # Sample pack to use - a dir-name in "sample_packs"
         index, # Index in pack or category
-        category, # Category - blank equals none
-        # Named args continue from here - see sampler.scd
-        "amp", 2.0
+        category # Category - blank equals none
     ] + args)
 
 step = 0.4
-short = step / 2.0
+short = step / 2
 
 play(0, "bd", ["amp", 2.5])
 time.sleep(step)
-play(0, "sn", ["ofs", 0.13])
+play(0, "sn", ["ofs", 0.13, "amp", 1.5])
 time.sleep(step)
 play(0, "bd", ["amp", 2.5])
 time.sleep(short)
@@ -32,4 +30,4 @@ play(0, "sn", ["ofs", 0.13])
 time.sleep(short / 2)
 play(0, "sn", ["ofs", 0.13])
 time.sleep(short / 2)
-play(0, "cy", ["ofs", 0.03, "sus", 2.0])
+play(0, "cy", ["ofs", 0.03, "sus", 2.0, "amp", 0.3])

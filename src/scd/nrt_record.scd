@@ -24,7 +24,7 @@ a.recordNRT(
     duration: {:end_time},
     // TODO: If it turns out we can call o here, o should be templated in
     // Update: Works!
-    action: { o.sendMsg("/nrt_done", "ok"); }
+    action: { {:out_socket_name}.sendMsg("/nrt_done", "ok"); }
 );
 
 server.remove;

@@ -329,13 +329,14 @@ impl TimedOscMessage {
 /*
     Extracted from a bundle:
     [/bundle_info, "nrt_record"]
-    [/nrt_record_info, <bpm: 120.0>, <file_name: "myfile.wav">]
+    [/nrt_record_info, <bpm: 120.0>, <file_name: "myfile.wav">, <end_beat: 44.0>]
     followed by untagged bundle: all contained timed messages
  */
 pub struct NRTRecordMessage {
     pub file_name: String,
     pub bpm: f32,
-    pub messages: Vec<TimedOscMessage>
+    pub messages: Vec<TimedOscMessage>,
+    pub end_beat: f32
 }
 
 impl NRTRecordMessage {
@@ -363,11 +364,13 @@ impl NRTRecordMessage {
         info_msg.expect_addr("/nrt_record_info")?;
         let bpm = info_msg.get_float_at(0, "bpm")?;
         let file_name = info_msg.get_string_at(1, "file_name")?;
+        let end_beat = info_msg.get_float_at(2, "end_beat")?;
 
         Ok(NRTRecordMessage {
             file_name,
             bpm,
-            messages: timed_messages
+            messages: timed_messages,
+            end_beat
         })
 
     }

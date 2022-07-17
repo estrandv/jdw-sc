@@ -159,7 +159,7 @@ use std::sync::{Arc, Mutex};
 
 use rosc::OscType;
 
-use crate::{IdRegistry, InternalOSCMorpher, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage, SampleDict};
+use crate::{create_nrt_script, IdRegistry, InternalOSCMorpher, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage, SampleDict, scd_templating};
 use crate::osc_model::TimedOscMessage;
 use crate::samples::Sample;
 
@@ -259,5 +259,37 @@ impl TimedOscMessage {
         row_template
 
     }
+}
+
+pub fn get_nrt_record_scd(msg: &NRTRecordMessage, buffer_handle: Arc<Mutex<SampleDict>>) -> Result<String, String> {
+    let rows = msg.get_processed_messages(
+        buffer_handle.clone()
+    );
+
+    let row_chunk: Vec<_> = rows.iter()
+        .map(|m| m.as_nrt_row()).collect();
+
+    let buffer_load_row_chunk = buffer_handle
+        .lock()
+        .unwrap()
+        .to_nrt_buffer_load_rows();
+
+    let synthdefs = scd_templating::read_all_synths("asBytes");
+
+    let synth_rows: Vec<_> = synthdefs.iter()
+        .map(|def | {return scd_templating::nrt_wrap_synthdef(def)})
+        .collect();
+
+    let mut all_nrt_rows: Vec<String> = vec![];
+    all_nrt_rows.extend(buffer_load_row_chunk);
+    all_nrt_rows.extend(synth_rows);
+    all_nrt_rows.extend(row_chunk);
+
+    create_nrt_script(
+        msg.bpm,
+        &msg.file_name,
+        msg.end_beat,
+        all_nrt_rows
+    )
 }
 
