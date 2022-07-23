@@ -8,6 +8,7 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
+use jdw_osc_lib::TimedOSCPacket;
 
 use log::{debug, info, warn};
 use regex::{Error, Regex};
@@ -16,7 +17,6 @@ use subprocess::{Popen, PopenConfig, Redirection};
 
 use crate::{config, scd_templating};
 use crate::config::{SC_SERVER_INCOMING_READ_TIMEOUT, SCLANG_IN_PORT, SERVER_IN_PORT, SERVER_OUT_PORT};
-use crate::osc_model::TimedOSCPacket;
 use crate::samples::SampleDict;
 
 fn get_arg(args: Vec<OscType>, arg_name: &str) -> Option<OscType> {
@@ -108,12 +108,12 @@ impl Supercollider {
 
         for msg in msgs {
             if msg.time == 0.0 {
-                handle.lock().unwrap().send_to_server(msg.message);
+                handle.lock().unwrap().send_to_server(msg.packet);
             } else {
                 let handle_clone = handle.clone();
                 thread::spawn(move || {
                     thread::sleep(Duration::from_secs_f32(msg.time));
-                    handle_clone.lock().unwrap().send_to_server(msg.message);
+                    handle_clone.lock().unwrap().send_to_server(msg.packet);
                     // TODO: Bit of a lifetime mess here - we actually want to call remove_running or even note_off
                     //  at this point but moving mut self is an issue...
                     // If running notes member is converted to refcell we can cheat the &mut self of remove_running
@@ -125,10 +125,8 @@ impl Supercollider {
         }
     }
 
-    pub fn send_to_server(&self, msg: OscMessage) {
-        let msg_buf = encoder::encode(&OscPacket::Message(
-            msg
-        )).unwrap();
+    pub fn send_to_server(&self, msg: OscPacket) {
+        let msg_buf = encoder::encode(&msg).unwrap();
 
         self.osc_socket.send_to(&msg_buf, self.scsynth_out_addr).unwrap();
     }

@@ -18,11 +18,12 @@ use rosc::{OscType, OscMessage, OscPacket};
 use std::cell::RefCell;
 use std::path::Path;
 use std::time::Duration;
+use jdw_osc_lib::TaggedBundle;
 use log::{debug, error, info, LevelFilter, warn};
 use simple_logger::SimpleLogger;
 use crate::internal_osc_conversion::{IdRegistry, InternalOSCMorpher};
 use crate::osc_client::OSCPoller;
-use crate::osc_model::{PlaySampleMessage, NoteOnTimedMessage, NoteModifyMessage, NoteOnMessage, TaggedBundle, NRTRecordMessage};
+use crate::osc_model::{PlaySampleMessage, NoteOnTimedMessage, NoteModifyMessage, NoteOnMessage, NRTRecordMessage};
 use crate::samples::SampleDict;
 use crate::scd_templating::create_nrt_script;
 

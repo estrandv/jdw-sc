@@ -89,10 +89,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aab8fc367588b89dcee83ab0fd66b72b50b72fa1904d7095045ace2b0c81c35"
 
 [[package]]
+name = "jdw-osc-lib"
+version = "0.1.0"
+source = "git+https://Emstrevk@bitbucket.org/Emstrevk/jdw-osc-lib.git?branch=master#dfb1d69421e30dd88ea651ba6b17bf1450482d8c"
+dependencies = [
+ "rosc",
+]
+
+[[package]]
 name = "jdw-sc"
 version = "0.1.0"
 dependencies = [
  "ctrlc",
+ "jdw-osc-lib",
  "json",
  "log",
  "regex",

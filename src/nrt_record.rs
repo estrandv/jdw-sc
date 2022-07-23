@@ -155,13 +155,14 @@
 
  */
 
+use std::convert::TryInto;
 use std::sync::{Arc, Mutex};
+use jdw_osc_lib::TimedOSCPacket;
 use log::warn;
 
-use rosc::{OscMessage, OscPacket, OscType};
+use rosc::{OscBundle, OscMessage, OscPacket, OscType};
 
 use crate::{create_nrt_script, IdRegistry, InternalOSCMorpher, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage, SampleDict, scd_templating};
-use crate::osc_model::TimedOSCPacket;
 use crate::samples::Sample;
 
 impl Sample {
@@ -262,12 +263,22 @@ impl NRTRecordMessage {
     }
 }
 
-impl TimedOSCPacket {
+trait NRTConvert {
+    fn as_nrt_row(&self) -> String;
+}
+
+impl NRTConvert for TimedOSCPacket {
     // Sort of a debug format; display as a string of values: [/s_new, "arg", 2.0, etc.]
-    pub fn as_nrt_row(&self) -> String {
+    fn as_nrt_row(&self) -> String {
         let mut row_template = "[ {:time}, [\"{:adr}\",{:args}] ]".to_string();
 
-        let args: Vec<_> = self.message.args.iter()
+        // TODO: Gonna cheat here for now. We're supposed to do the whole processor routine...
+        let msg = match &self.packet {
+            OscPacket::Message(msg) => {Some(msg.clone())}
+            OscPacket::Bundle(_) => {None}
+        };
+
+        let args: Vec<_> = msg.clone().unwrap().args.iter()
             .map(|arg| {
                 let ball = match arg {
                     OscType::Int(val) => {
@@ -288,7 +299,7 @@ impl TimedOSCPacket {
             }).collect();
 
         row_template = row_template.replace("{:time}", &format!("{:.5}", &self.time));
-        row_template = row_template.replace("{:adr}", &format!("{}", &self.message.addr));
+        row_template = row_template.replace("{:adr}", &format!("{}", msg.unwrap().addr));
 
         let arg_string = args.join(",");
 

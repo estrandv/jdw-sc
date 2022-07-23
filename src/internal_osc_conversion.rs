@@ -2,13 +2,13 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use jdw_osc_lib::TimedOSCPacket;
 
 use log::{debug, info, warn};
 use regex::Regex;
 use rosc::{OscMessage, OscPacket, OscType};
 
 use crate::{NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, PlaySampleMessage, SampleDict};
-use crate::osc_model::TimedOSCPacket;
 
 
 /*
@@ -88,7 +88,6 @@ pub trait InternalOSCMorpher {
         self.as_osc(reg).iter()
             .map(|msg| TimedOSCPacket {
                 time: msg.time + start_time,
-                message: msg.message.clone(),
                 packet: msg.packet.clone()
             }).collect()
     }
@@ -116,7 +115,7 @@ fn create_s_new(
 
     let packet = OscPacket::Message(message.clone());
 
-    TimedOSCPacket {time: 0.0, message, packet}
+    TimedOSCPacket {time: 0.0, packet}
 }
 
 impl InternalOSCMorpher for NoteOnTimedMessage {
@@ -135,7 +134,7 @@ impl InternalOSCMorpher for NoteOnTimedMessage {
         };
 
         let packet = OscPacket::Message(message.clone());
-        let off_msg = TimedOSCPacket {time: self.gate_time, message, packet };
+        let off_msg = TimedOSCPacket {time: self.gate_time, packet };
 
         vec![msg, off_msg]
 
@@ -172,7 +171,7 @@ impl InternalOSCMorpher for NoteModifyMessage {
 
                 let packet = OscPacket::Message(message.clone());
 
-                TimedOSCPacket {time: 0.0, message, packet }
+                TimedOSCPacket {time: 0.0, packet }
             }).collect()
 
     }
