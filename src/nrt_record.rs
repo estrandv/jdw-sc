@@ -156,11 +156,12 @@
  */
 
 use std::sync::{Arc, Mutex};
+use log::warn;
 
-use rosc::OscType;
+use rosc::{OscMessage, OscPacket, OscType};
 
 use crate::{create_nrt_script, IdRegistry, InternalOSCMorpher, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage, SampleDict, scd_templating};
-use crate::osc_model::TimedOscMessage;
+use crate::osc_model::TimedOSCPacket;
 use crate::samples::Sample;
 
 impl Sample {
@@ -175,45 +176,60 @@ impl Sample {
     }
 }
 
-// TODO: Handle all the unwraps
 
-impl NRTRecordMessage {
-    pub fn get_processed_messages(
-        &self,
-        buffer_handle: Arc<Mutex<SampleDict>>,
-    ) -> Vec<TimedOscMessage> {
-        let registry = IdRegistry::new();
-        let reg_handle = Arc::new(Mutex::new(registry));
-        let mut current_time = 0.0;
-        let mut result_vector: Vec<TimedOscMessage> = Vec::new();
+struct NRTPacketConverter {
+    reg_handle: Arc<Mutex<IdRegistry>>,
+    buffer_handle: Arc<Mutex<SampleDict>>,
+    current_beat: f32,
+}
 
-        for msg in &self.messages {
-            current_time += msg.time;
+impl NRTPacketConverter {
+
+    fn process_msg(&self, msg: &OscMessage) -> Vec<TimedOSCPacket> {
+        return if msg.addr == "/note_on_timed" {
+            let res = NoteOnTimedMessage::new(&msg.clone());
+            res.unwrap()
+                .as_nrt_osc(self.reg_handle.clone(), self.current_beat)
+        } else if msg.addr == "/note_on" {
+            NoteOnMessage::new(msg)
+                .unwrap()
+                .as_nrt_osc(self.reg_handle.clone(), self.current_beat)
+        } else if msg.addr == "/play_sample" {
+            let processed_message = PlaySampleMessage::new(msg).unwrap();
+            processed_message.into_internal(
+                self.buffer_handle.clone()
+            ).as_nrt_osc(self.reg_handle.clone(), self.current_beat)
+        } else if msg.addr == "/note_modify" {
+            // TODO: Must the handles really be cloned?
+            NoteModifyMessage::new(msg)
+                .unwrap()
+                .as_nrt_osc(self.reg_handle.clone(), self.current_beat)
+        } else {
+            vec![] // TODO: Wrap in some default handler - important part is using current_time
+        };
+    }
+
+    fn process_packet(&self, timed_packet: &TimedOSCPacket) -> Vec<TimedOSCPacket> {
+        return match &timed_packet.packet {
+            OscPacket::Message(msg) => {
+                self.process_msg(msg)
+            }
+            OscPacket::Bundle(bun) => {
+                warn!("NRT support for timed bundles not yet implemented");
+                vec![]
+            }
+        }
+    }
+
+    fn process_packets(&mut self, packets: &Vec<TimedOSCPacket>) -> Vec<TimedOSCPacket> {
+        let mut result_vector: Vec<TimedOSCPacket> = Vec::new();
+
+        for msg in packets {
 
             // Each contained message must first be converted to its internal equivalent
-            let rows =
-                if msg.message.addr == "/note_on_timed" {
-                    let res = NoteOnTimedMessage::new(&msg.message.clone());
-                    res.unwrap()
-                        .as_nrt_osc(reg_handle.clone(), current_time)
-                } else if msg.message.addr == "/note_on" {
-                    NoteOnMessage::new(&msg.message)
-                        .unwrap()
-                        .as_nrt_osc(reg_handle.clone(), current_time)
-                } else if msg.message.addr == "/play_sample" {
-                    let processed_message = PlaySampleMessage::new(&msg.message).unwrap();
-                    processed_message.into_internal(
-                        buffer_handle.clone()
-                    ).as_nrt_osc(reg_handle.clone(), current_time)
-                } else if msg.message.addr == "/note_modify" {
-                    NoteModifyMessage::new(&msg.message)
-                        .unwrap()
-                        .as_nrt_osc(reg_handle.clone(), current_time)
-                } else {
-                    vec![] // TODO: Wrap in some default handler - important part is using current_time
-                };
+            let rows = self.process_packet(msg);
 
-            current_time += msg.time;
+            self.current_beat += msg.time;
             result_vector.extend(rows);
         }
 
@@ -222,9 +238,31 @@ impl NRTRecordMessage {
 
         result_vector
     }
+
 }
 
-impl TimedOscMessage {
+impl NRTRecordMessage {
+// TODO: Handle all the unwraps
+
+    pub fn get_processed_messages(
+        &self,
+        buffer_handle: Arc<Mutex<SampleDict>>,
+    ) -> Vec<TimedOSCPacket> {
+        let registry = IdRegistry::new();
+        let reg_handle = Arc::new(Mutex::new(registry));
+
+        let mut processor = NRTPacketConverter {
+            reg_handle,
+            buffer_handle,
+            current_beat: 0.0
+        };
+
+        processor.process_packets(&self.messages)
+
+    }
+}
+
+impl TimedOSCPacket {
     // Sort of a debug format; display as a string of values: [/s_new, "arg", 2.0, etc.]
     pub fn as_nrt_row(&self) -> String {
         let mut row_template = "[ {:time}, [\"{:adr}\",{:args}] ]".to_string();

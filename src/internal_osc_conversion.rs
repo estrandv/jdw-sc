@@ -5,10 +5,10 @@ use std::sync::{Arc, Mutex};
 
 use log::{debug, info, warn};
 use regex::Regex;
-use rosc::{OscMessage, OscType};
+use rosc::{OscMessage, OscPacket, OscType};
 
 use crate::{NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, PlaySampleMessage, SampleDict};
-use crate::osc_model::TimedOscMessage;
+use crate::osc_model::TimedOSCPacket;
 
 
 /*
@@ -83,12 +83,13 @@ impl IdRegistry {
 }
 
 pub trait InternalOSCMorpher {
-    fn as_osc(&self, reg: Arc<Mutex<IdRegistry>>) -> Vec<TimedOscMessage>;
-    fn as_nrt_osc(&self, reg: Arc<Mutex<IdRegistry>>, start_time: f32) -> Vec<TimedOscMessage> {
+    fn as_osc(&self, reg: Arc<Mutex<IdRegistry>>) -> Vec<TimedOSCPacket>;
+    fn as_nrt_osc(&self, reg: Arc<Mutex<IdRegistry>>, start_time: f32) -> Vec<TimedOSCPacket> {
         self.as_osc(reg).iter()
-            .map(|msg| TimedOscMessage {
+            .map(|msg| TimedOSCPacket {
                 time: msg.time + start_time,
-                message: msg.message.clone()
+                message: msg.message.clone(),
+                packet: msg.packet.clone()
             }).collect()
     }
 }
@@ -97,7 +98,7 @@ fn create_s_new(
     node_id: i32,
     synth_name: &str,
     msg_args: &Vec<OscType>
-) -> TimedOscMessage {
+) -> TimedOSCPacket {
 
     let mut final_args = vec![
         OscType::String(synth_name.to_string()),
@@ -108,26 +109,33 @@ fn create_s_new(
 
     final_args.extend(msg_args.clone());
 
-    TimedOscMessage {time: 0.0, message: OscMessage {
+    let message = OscMessage {
         addr: "/s_new".to_string(),
         args:  final_args
-    }}
+    };
+
+    let packet = OscPacket::Message(message.clone());
+
+    TimedOSCPacket {time: 0.0, message, packet}
 }
 
 impl InternalOSCMorpher for NoteOnTimedMessage {
-    fn as_osc(&self, reg: Arc<Mutex<IdRegistry>>) -> Vec<TimedOscMessage> {
+    fn as_osc(&self, reg: Arc<Mutex<IdRegistry>>) -> Vec<TimedOSCPacket> {
 
         let node_id = reg.lock().unwrap().assign(&self.external_id);
         let msg = create_s_new(node_id, &self.synth_name, &self.args);
 
-        let off_msg = TimedOscMessage {time: self.gate_time, message: OscMessage {
+        let message = OscMessage {
             addr: "/n_set".to_string(),
             args: vec![
                 OscType::Int(node_id), // NodeID
                 OscType::String("gate".to_string()), // gate=0 is note off
                 OscType::Float(0.0)
             ]
-        }};
+        };
+
+        let packet = OscPacket::Message(message.clone());
+        let off_msg = TimedOSCPacket {time: self.gate_time, message, packet };
 
         vec![msg, off_msg]
 
@@ -136,7 +144,7 @@ impl InternalOSCMorpher for NoteOnTimedMessage {
 }
 
 impl InternalOSCMorpher for NoteOnMessage {
-    fn as_osc(&self, reg: Arc<Mutex<IdRegistry>>) -> Vec<TimedOscMessage> {
+    fn as_osc(&self, reg: Arc<Mutex<IdRegistry>>) -> Vec<TimedOSCPacket> {
         let node_id = reg.lock().unwrap().assign(&self.external_id);
         let msg = create_s_new(node_id, &self.synth_name, &self.args);
 
@@ -146,7 +154,7 @@ impl InternalOSCMorpher for NoteOnMessage {
 }
 
 impl InternalOSCMorpher for NoteModifyMessage {
-    fn as_osc(&self, reg: Arc<Mutex<IdRegistry>>) -> Vec<TimedOscMessage> {
+    fn as_osc(&self, reg: Arc<Mutex<IdRegistry>>) -> Vec<TimedOSCPacket> {
         let node_ids = reg.lock().unwrap().get_regex(&self.external_id_regex);
 
         node_ids.iter()
@@ -157,10 +165,14 @@ impl InternalOSCMorpher for NoteModifyMessage {
 
                 final_ars.extend(self.args.clone());
 
-                TimedOscMessage {time: 0.0, message: OscMessage {
+                let message = OscMessage {
                     addr: "/n_set".to_string(),
                     args: final_ars
-                }}
+                };
+
+                let packet = OscPacket::Message(message.clone());
+
+                TimedOSCPacket {time: 0.0, message, packet }
             }).collect()
 
     }
@@ -205,7 +217,7 @@ impl PlaySampleMessage {
 }
 
 impl InternalOSCMorpher for PlaySampleInternalMessage {
-    fn as_osc(&self, reg: Arc<Mutex<IdRegistry>>) -> Vec<TimedOscMessage> {
+    fn as_osc(&self, reg: Arc<Mutex<IdRegistry>>) -> Vec<TimedOSCPacket> {
         let node_id = reg.lock().unwrap().assign(&self.external_id);
         vec![create_s_new(
             node_id,

@@ -16,7 +16,7 @@ use subprocess::{Popen, PopenConfig, Redirection};
 
 use crate::{config, scd_templating};
 use crate::config::{SC_SERVER_INCOMING_READ_TIMEOUT, SCLANG_IN_PORT, SERVER_IN_PORT, SERVER_OUT_PORT};
-use crate::osc_model::TimedOscMessage;
+use crate::osc_model::TimedOSCPacket;
 use crate::samples::SampleDict;
 
 fn get_arg(args: Vec<OscType>, arg_name: &str) -> Option<OscType> {
@@ -104,7 +104,7 @@ impl Supercollider {
         self.sclang_process.terminate();
     }
 
-    pub fn send_timed(handle: Arc<Mutex<Supercollider>>, msgs: Vec<TimedOscMessage>) {
+    pub fn send_timed(handle: Arc<Mutex<Supercollider>>, msgs: Vec<TimedOSCPacket>) {
 
         for msg in msgs {
             if msg.time == 0.0 {

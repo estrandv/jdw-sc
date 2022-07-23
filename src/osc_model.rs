@@ -266,6 +266,12 @@ impl TaggedBundle {
         })
     }
 
+    fn get_packet(&self, content_index: usize) -> Result<OscPacket, String> {
+        self.contents.get(content_index)
+            .map(|pct| pct.clone())
+            .ok_or("Failed to fetch packet".to_string())
+    }
+
     fn get_message(&self, content_index: usize) -> Result<OscMessage, String> {
         self.contents.get(content_index)
             .map(|pct| pct.clone())
@@ -293,34 +299,39 @@ impl TaggedBundle {
     }
 }
 
+// TODO: The sooneer we make PACKET the contained class, the better 
 /*
-    Timed osc messages are used to delay execution. This has uses both for NRT recording as
+    Timed osc packets are used to delay execution. This has uses both for NRT recording as
         well as sequencer spacing or timed gate off messages.
     [/bundle_info, "timed_msg"]
     [/timed_msg_info, 0.0]
-    [... msg ...]
+    [... packet ...]
  */
 #[derive(Debug, Clone)]
-pub struct TimedOscMessage {
+pub struct TimedOSCPacket {
     pub time: f32,
-    pub message: OscMessage
+    pub message: OscMessage, // TODO: Stepping stone, delete
+    pub packet: OscPacket,
 }
 
-impl TimedOscMessage {
-    pub fn from_bundle(bundle: TaggedBundle) -> Result<TimedOscMessage, String>{
+impl TimedOSCPacket {
+
+    pub fn from_bundle(bundle: TaggedBundle) -> Result<TimedOSCPacket, String>{
         if &bundle.bundle_tag != "timed_msg" {
             return Err(format!("Attempted to parse {} as timed_msg bundle", &bundle.bundle_tag));
         }
 
         let info_msg = bundle.get_message(0)?;
         let actual_msg = bundle.get_message(1)?;
+        let packet = bundle.get_packet(1)?;
 
         info_msg.expect_addr("/timed_msg_info")?;
         let time = info_msg.get_float_at(0, "time")?;
 
-        Ok(TimedOscMessage {
+        Ok(TimedOSCPacket {
             time,
-            message: actual_msg
+            message: actual_msg,
+            packet
         })
 
     }
@@ -335,7 +346,7 @@ impl TimedOscMessage {
 pub struct NRTRecordMessage {
     pub file_name: String,
     pub bpm: f32,
-    pub messages: Vec<TimedOscMessage>,
+    pub messages: Vec<TimedOSCPacket>,
     pub end_beat: f32
 }
 
@@ -349,12 +360,12 @@ impl NRTRecordMessage {
         let message_bundle = bundle.get_bundle(1)?;
 
         let timed_messages: Vec<_> = message_bundle.content.iter()
-            .map(|packet| match packet {
+            .map(|packet| return match packet {
                 OscPacket::Bundle(bun) => {
                     let tagged = TaggedBundle::new(&bun)?;
-                    return Ok(TimedOscMessage::from_bundle(tagged)?);
+                    Ok(TimedOSCPacket::from_bundle(tagged)?)
                 }
-                _ => {return Err("Unexpected non-bundle when unpacking timed messages bundle".to_string());}
+                _ => { Err("Unexpected non-bundle when unpacking timed messages bundle".to_string()) }
             })
             // TODO: Pref I guess we want to error check properly but cba right now
             .filter(|m| m.is_ok())
