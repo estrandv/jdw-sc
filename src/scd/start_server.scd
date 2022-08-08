@@ -7,7 +7,9 @@
 //Server.supernova; // Can be used to switch backend.
 {:server_name} = Server.new("jdw-sc", NetAddr.new("{:application_ip}", {:server_in_port}));
 {:server_name}.options.memSize = {:memory_bytes};
-{:server_name}.latency = 0.05; // Default latency setting is 0.2 sec - this might be irrelevant for our use case but set nontheless
+// Server latency only affects PBind, which in turn uses it by placin it in the <time> arg of bundled sends to server
+// Leaving it here for a bit as a reminder that it is useless
+//{:server_name}.latency = 0.2;
 
 // https://crashserver.fr/tutorial-how-to-record-foxdot-multi-outputs-in-a-daw/
 // {:server_name}.options.numOutputBusChannels = 8;

@@ -7,12 +7,12 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 use jdw_osc_lib::TimedOSCPacket;
 
 use log::{debug, info, warn};
 use regex::{Error, Regex};
-use rosc::{encoder, OscMessage, OscPacket, OscTime, OscType};
+use rosc::{encoder, OscBundle, OscMessage, OscPacket, OscTime, OscType};
 use subprocess::{Popen, PopenConfig, Redirection};
 
 use crate::{config, scd_templating};
@@ -126,7 +126,22 @@ impl Supercollider {
     }
 
     pub fn send_to_server(&self, msg: OscPacket) {
-        let msg_buf = encoder::encode(&msg).unwrap();
+
+        // TODO: Trying out some latency adjustments to fix desync issues
+        // This is not the optimal way - these operations are highly reliant on context
+
+        let now = SystemTime::now() + Duration::from_millis(config::LATENCY_MS);
+
+        use std::convert::TryFrom;
+        let bundle = OscBundle {
+            timetag: OscTime::try_from(now).unwrap(),
+            content: vec![msg]
+        };
+
+        let packet = OscPacket::Bundle(bundle);
+
+        // NOTE: Used to just send &msg here
+        let msg_buf = encoder::encode(&packet).unwrap();
 
         self.osc_socket.send_to(&msg_buf, self.scsynth_out_addr).unwrap();
     }
