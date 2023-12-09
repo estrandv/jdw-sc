@@ -1,5 +1,0 @@
-Drum Machine: Kay R-8
-Format: 24bit 48kHz WAV
-Length: 18 samples = 317kB
-
-Nate Craun
