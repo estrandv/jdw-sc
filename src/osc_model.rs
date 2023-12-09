@@ -11,7 +11,7 @@ use rosc::{OscBundle, OscError, OscMessage, OscPacket, OscType};
 use std::option::Option;
 use std::sync::{Arc, Mutex};
 use jdw_osc_lib::{OscArgHandler, TaggedBundle, TimedOSCPacket};
-use log::{debug, warn};
+use log::{debug, info, warn};
 use crate::SampleDict;
 
 

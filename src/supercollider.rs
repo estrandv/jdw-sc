@@ -108,6 +108,8 @@ impl Supercollider {
 
         for msg in msgs {
             if msg.time == 0.0 {
+                // TODO: No need for threading. Internal timing can be added to latency just as well
+                //  if we add latency on this level and send it as a parameter
                 handle.lock().unwrap().send_to_server(msg.packet);
             } else {
                 let handle_clone = handle.clone();

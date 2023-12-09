@@ -1,0 +1,12 @@
+/home/estrandv/programming/jdw-sc/target/debug/deps/subprocess-07b15ec9695ba56e.rmeta: /home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/lib.rs /home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/builder.rs /home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/communicate.rs /home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/popen.rs /home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/posix.rs /home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/os_common.rs
+
+/home/estrandv/programming/jdw-sc/target/debug/deps/libsubprocess-07b15ec9695ba56e.rlib: /home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/lib.rs /home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/builder.rs /home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/communicate.rs /home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/popen.rs /home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/posix.rs /home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/os_common.rs
+
+/home/estrandv/programming/jdw-sc/target/debug/deps/subprocess-07b15ec9695ba56e.d: /home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/lib.rs /home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/builder.rs /home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/communicate.rs /home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/popen.rs /home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/posix.rs /home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/os_common.rs
+
+/home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/lib.rs:
+/home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/builder.rs:
+/home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/communicate.rs:
+/home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/popen.rs:
+/home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/posix.rs:
+/home/estrandv/.cargo/registry/src/github.com-1ecc6299db9ec823/subprocess-0.2.8/src/os_common.rs:

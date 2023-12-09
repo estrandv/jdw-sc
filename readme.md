@@ -16,7 +16,7 @@ The general aim is to provide easier ways to interact with Supercollider via OSC
 
 Examples for calling all custom functions (via python) are provided in the "python" directory.
 
-# Notable "hacks" to keep track of
+# Notable "hacks" and issues to be aware of
 - Important scd synth args
     - "bus" arg for sampler.scd is heavily referenced in sampler logic - biggest danger is attempting to supply it manually
     - "gate" arg is the universal "note off" arg - if a synthdef does not have "gate" logic no note off logic will work

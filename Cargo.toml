@@ -16,4 +16,4 @@ json = "*"
 regex = "1.6.0"
 log = "0.4.17"
 simple_logger = "2.2.0"
-jdw-osc-lib = { git = "https://Emstrevk@bitbucket.org/Emstrevk/jdw-osc-lib.git", branch = "master" }
+jdw-osc-lib = { git = "ssh://git@bitbucket.org/Emstrevk/jdw-osc-lib.git", branch = "master" }

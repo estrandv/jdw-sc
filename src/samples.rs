@@ -72,6 +72,9 @@ impl SamplePack {
                 let index = ( (number) % (pack_max_index) );
 
                 let samples = sub_pack.unwrap().clone();
+
+                info!("Resolved buffer number for cat {}", &cat);
+
                 return samples.get(index).unwrap().buffer_nr;
             }
             else {
@@ -79,6 +82,8 @@ impl SamplePack {
             }
 
         }
+
+        info!("Request did not provide any category key, playing sample as buffer index");
 
         let index = (number % (self.samples.len()));
         return self.samples.get(index).unwrap().buffer_nr;
@@ -145,7 +150,7 @@ fn get_sample_category(filename: &str) -> String {
             excludes: vec![]
         },
         SampleCategory {
-            key: "bd", includes: vec!["bass", "drum", "kick"],
+            key: "bd", includes: vec!["bass", "drum", "kick", "bd"],
             excludes: vec!["crash"]
         },
         SampleCategory {
@@ -157,7 +162,7 @@ fn get_sample_category(filename: &str) -> String {
             excludes: vec![]
         },
         SampleCategory {
-            key: "sn", includes: vec!["snare", "clap"],
+            key: "sn", includes: vec!["snare", "clap", "sn"],
             excludes: vec![]
         },
         SampleCategory {
@@ -201,7 +206,9 @@ impl SampleDict {
             Some(sp) => {
                 Option::Some(sp.get_buffer_number(number, category))
             },
-            None => Option::None
+            None => {
+                return Option::None;
+            }
         }
 
     }
@@ -293,6 +300,7 @@ impl SampleDict {
                     .to_str().ok_or("dir name unreadable")?
                     .to_string();
 
+                info!("Creating sample pack with name {}", &pack_name);
                 packs.insert(pack_name, SamplePack{
                     dir_path: path,
                     samples,

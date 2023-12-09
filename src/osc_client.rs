@@ -12,7 +12,7 @@ use crate::config::{APPLICATION_IN_PORT, APPLICATION_IP};
 
 pub struct OSCPoller {
     socket: UdpSocket,
-    buf: [u8; 1536]
+    buf: [u8; 33072]
 }
 
 impl OSCPoller {
@@ -24,7 +24,7 @@ impl OSCPoller {
         };
 
         let sock = UdpSocket::bind(addr).unwrap();
-        let buf = [0u8; rosc::decoder::MTU];
+        let buf = [0u8; 33072];
 
         OSCPoller {
             socket: sock,

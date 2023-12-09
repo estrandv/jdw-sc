@@ -27,6 +27,16 @@ use crate::osc_model::{PlaySampleMessage, NoteOnTimedMessage, NoteModifyMessage,
 use crate::samples::SampleDict;
 use crate::scd_templating::create_nrt_script;
 
+
+/*
+    TODO: General refactoring of the whole main loop. 
+    The Supercollider class is currently a hodge podge of different paradigms since it has evolved organically 
+        from little to medium rust knowledge on my part. 
+    Ideally, we want to separate state and logic better, like we have in jdw-sequencer. 
+    A poller should process incoming messages into neat vectors/buffers of "messages to send to sclang or scsynth"
+        and then use a minimal and transparent amount of locks to accomplish that. 
+*/
+
 fn main() {
 
     // Handles all log macros, e.g. "warn!()" to print info in terminal
