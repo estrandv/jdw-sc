@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fmt::format;
 use std::io::Error;
 use std::sync::{Arc, Mutex};
-use log::{debug, info};
+use log::{debug, info, warn};
 use rosc::OscType;
 use crate::config::{SERVER_NAME, SERVER_OSC_SOCKET_NAME};
 use crate::PlaySampleMessage;
@@ -20,7 +20,7 @@ impl Sample {
     // Typical "read into buffer" script to be run on server boot
     pub fn to_buffer_load_scd(&self, dir: &str) -> String {
         format!(
-            "Buffer.read({}, File.getcwd +/+ \"{}\", 0, -1, bufnum: {}); \n",
+            "Buffer.read({}, \"{}\", 0, -1, bufnum: {}); \n",
             SERVER_NAME,
             dir.to_string() + "/" + &self.file_name.to_string(),
             self.buffer_nr
@@ -47,6 +47,7 @@ impl SamplePack {
         for sample in &self.samples {
             script += &sample.to_buffer_load_scd(dir)
         }
+        debug!("Buffer load scd string for sample pack: {}", &script);
         script.to_string()
     }
 
@@ -162,7 +163,7 @@ fn get_sample_category(filename: &str) -> String {
             excludes: vec![]
         },
         SampleCategory {
-            key: "sn", includes: vec!["snare", "clap", "sn"],
+            key: "sn", includes: vec!["snare", "clap", "sn", "sd"],
             excludes: vec![]
         },
         SampleCategory {
@@ -234,6 +235,14 @@ impl SampleDict {
 
         let mut packs: HashMap<String, SamplePack> = HashMap::new();
 
+        if !dir.exists() {
+            warn!("Samples dir {:?} does not exist, skipping sample loading...", &dir);
+            return Ok(SampleDict {
+                sample_packs: packs,
+                counter
+            });
+        }
+
         for entry in fs::read_dir(dir).unwrap() {
             let path = match entry {
                 Ok(e) => {Ok(e)}
@@ -276,7 +285,7 @@ impl SampleDict {
                 // Each file in a subfolder is treated as a sample
                 for name in files_in_dir {
 
-                    if name.contains(".wav") {
+                    if name.contains(".wav") || name.contains(".WAV") {
                         let buffer_nr = counter.next();
 
                         let sample = Sample {
@@ -300,7 +309,7 @@ impl SampleDict {
                     .to_str().ok_or("dir name unreadable")?
                     .to_string();
 
-                info!("Creating sample pack with name {}", &pack_name);
+                info!("Creating sample pack with name {} and path {:?}", &pack_name, &path);
                 packs.insert(pack_name, SamplePack{
                     dir_path: path,
                     samples,

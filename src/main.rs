@@ -1,5 +1,4 @@
 #![feature(result_flattening)]
-#![feature(is_some_with)]
 
 mod supercollider;
 mod scd_templating;
@@ -26,6 +25,7 @@ use crate::osc_client::OSCPoller;
 use crate::osc_model::{PlaySampleMessage, NoteOnTimedMessage, NoteModifyMessage, NoteOnMessage, NRTRecordMessage};
 use crate::samples::SampleDict;
 use crate::scd_templating::create_nrt_script;
+use home::home_dir;
 
 
 /*
@@ -87,7 +87,11 @@ fn main() {
         Prepare sample players. All samples are read into buffers via read_scd on the sclang client.
         The sample dict struct keeps track of which buffer index belongs to which sample pack.
      */
-    let buffer_data = samples::SampleDict::from_dir(Path::new("sample_packs")).unwrap_or_else(|e| {
+
+    let mut home_dir = home_dir().unwrap();
+    home_dir.push("sample_packs");
+
+    let buffer_data = samples::SampleDict::from_dir(&home_dir).unwrap_or_else(|e| {
         error!("Unable to read buffer data: {} - no samples will be provided", e);
         SampleDict::dummy()
     });
