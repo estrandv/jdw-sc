@@ -17,7 +17,7 @@ a = Score([
 ]); // testcomment
 
 a.recordNRT(
-    outputFilePath: "temp/{:file_name}".standardizePath,
+    outputFilePath: "{:file_name}".standardizePath,
     headerFormat: "wav",
     sampleFormat: "int16",
     options: server.options,
