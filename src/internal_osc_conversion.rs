@@ -1,7 +1,9 @@
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+use bigdecimal::BigDecimal;
 use jdw_osc_lib::TimedOSCPacket;
 
 use log::{debug, info, warn};
@@ -84,10 +86,10 @@ impl IdRegistry {
 
 pub trait InternalOSCMorpher {
     fn as_osc(&self, reg: Arc<Mutex<IdRegistry>>) -> Vec<TimedOSCPacket>;
-    fn as_nrt_osc(&self, reg: Arc<Mutex<IdRegistry>>, start_time: f32) -> Vec<TimedOSCPacket> {
+    fn as_nrt_osc(&self, reg: Arc<Mutex<IdRegistry>>, start_time: BigDecimal) -> Vec<TimedOSCPacket> {
         self.as_osc(reg).iter()
             .map(|msg| TimedOSCPacket {
-                time: msg.time + start_time,
+                time: msg.time.clone() + start_time.clone(),
                 packet: msg.packet.clone()
             }).collect()
     }
@@ -115,7 +117,7 @@ fn create_s_new(
 
     let packet = OscPacket::Message(message.clone());
 
-    TimedOSCPacket {time: 0.0, packet}
+    TimedOSCPacket {time: BigDecimal::from_str("0.0").unwrap(), packet}
 }
 
 impl InternalOSCMorpher for NoteOnTimedMessage {
@@ -134,7 +136,7 @@ impl InternalOSCMorpher for NoteOnTimedMessage {
         };
 
         let packet = OscPacket::Message(message.clone());
-        let off_msg = TimedOSCPacket {time: self.gate_time, packet };
+        let off_msg = TimedOSCPacket {time: self.gate_time.clone(), packet };
 
         vec![msg, off_msg]
 
@@ -171,7 +173,7 @@ impl InternalOSCMorpher for NoteModifyMessage {
 
                 let packet = OscPacket::Message(message.clone());
 
-                TimedOSCPacket {time: 0.0, packet }
+                TimedOSCPacket {time: BigDecimal::from_str("0.0").unwrap(), packet }
             }).collect()
 
     }

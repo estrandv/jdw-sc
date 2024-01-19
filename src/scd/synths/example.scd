@@ -22,7 +22,6 @@ gen = EnvGen.kr(env, gate, doneAction: Done.freeSelf);
 
 // Mono to stereo
 osc = osc * gen; 
-
 osc = Mix(osc) * 0.5;
 // Note: {:word} format is not sclang but an arbitrary templating format used for placeholders
 // See: synth_templates.rs

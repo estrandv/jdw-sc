@@ -7,6 +7,8 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::format;
+use std::str::FromStr;
+use bigdecimal::BigDecimal;
 use rosc::{OscBundle, OscError, OscMessage, OscPacket, OscType};
 use std::option::Option;
 use std::sync::{Arc, Mutex};
@@ -51,7 +53,7 @@ fn validate_args(args: &Vec<OscType>) -> Result<(), String> {
 pub struct NoteOnTimedMessage {
     pub synth_name: String, // The synth upon which to play the note.
     pub external_id: String, // Identifier for note to allow later modification.
-    pub gate_time: f32, // Should be in ms rather than beats; wrapper has no BPM.
+    pub gate_time: BigDecimal, // TODO: Should be in pre-calculated ms rather than beats; this application has no BPM. Same for all time args, really. hard. 
     pub args: Vec<OscType> // Named args such as "bus" or "rel"
 }
 
@@ -64,7 +66,8 @@ impl NoteOnTimedMessage {
 
         let synth_name = msg.get_string_at(0, "synth name")?;
         let external_id = msg.get_string_at(1, "external id")?;
-        let gate_time = msg.get_float_at(2, "gate time")?;
+        let gate_time_str = msg.get_string_at(2, "gate time")?;
+        let gate_time = BigDecimal::from_str(&gate_time_str).unwrap();
 
         let named_args = if msg.args.len() > 3 {(&msg.args[3..].to_vec()).clone()} else {vec![]};
 

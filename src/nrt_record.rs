@@ -1,5 +1,7 @@
 use std::convert::TryInto;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+use bigdecimal::BigDecimal;
 use jdw_osc_lib::TimedOSCPacket;
 use log::{warn, debug};
 
@@ -27,7 +29,7 @@ impl Sample {
 struct NRTPacketConverter {
     reg_handle: Arc<Mutex<IdRegistry>>,
     buffer_handle: Arc<Mutex<SampleDict>>,
-    current_beat: f32,
+    current_beat: BigDecimal,
 }
 
 impl NRTPacketConverter {
@@ -36,21 +38,21 @@ impl NRTPacketConverter {
         return if msg.addr == "/note_on_timed" {
             let res = NoteOnTimedMessage::new(&msg.clone());
             res.unwrap()
-                .as_nrt_osc(self.reg_handle.clone(), self.current_beat)
+                .as_nrt_osc(self.reg_handle.clone(), self.current_beat.clone())
         } else if msg.addr == "/note_on" {
             NoteOnMessage::new(msg)
                 .unwrap()
-                .as_nrt_osc(self.reg_handle.clone(), self.current_beat)
+                .as_nrt_osc(self.reg_handle.clone(), self.current_beat.clone())
         } else if msg.addr == "/play_sample" {
             let processed_message = PlaySampleMessage::new(msg).unwrap();
             processed_message.into_internal(
                 self.buffer_handle.clone()
-            ).as_nrt_osc(self.reg_handle.clone(), self.current_beat)
+            ).as_nrt_osc(self.reg_handle.clone(), self.current_beat.clone())
         } else if msg.addr == "/note_modify" {
             // TODO: Must the handles really be cloned?
             NoteModifyMessage::new(msg)
                 .unwrap()
-                .as_nrt_osc(self.reg_handle.clone(), self.current_beat)
+                .as_nrt_osc(self.reg_handle.clone(), self.current_beat.clone())
         } else {
             vec![] // TODO: Wrap in some default handler - important part is using current_time
         };
@@ -76,12 +78,12 @@ impl NRTPacketConverter {
             // Each contained message must first be converted to its internal equivalent
             let rows = self.process_packet(msg);
 
-            self.current_beat += msg.time;
+            self.current_beat += msg.time.clone();
             result_vector.extend(rows);
         }
 
         // Ensure all messages are in order
-        result_vector.sort_by(|a, b| a.time.total_cmp(&b.time));
+        result_vector.sort_by(|a, b| a.time.cmp(&b.time));
 
         result_vector
     }
@@ -101,7 +103,7 @@ impl NRTRecordMessage {
         let mut processor = NRTPacketConverter {
             reg_handle,
             buffer_handle,
-            current_beat: 0.0
+            current_beat: BigDecimal::from_str("0.0").unwrap()
         };
 
         processor.process_packets(&self.messages)

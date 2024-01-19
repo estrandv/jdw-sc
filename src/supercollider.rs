@@ -8,6 +8,7 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime};
+use bigdecimal::{BigDecimal, ToPrimitive, Zero};
 use jdw_osc_lib::TimedOSCPacket;
 
 use log::{debug, info, warn};
@@ -107,14 +108,16 @@ impl Supercollider {
     pub fn send_timed(handle: Arc<Mutex<Supercollider>>, msgs: Vec<TimedOSCPacket>) {
 
         for msg in msgs {
-            if msg.time == 0.0 {
+            if msg.time == BigDecimal::zero() {
                 // TODO: No need for threading. Internal timing can be added to latency just as well
                 //  if we add latency on this level and send it as a parameter
                 handle.lock().unwrap().send_to_server(msg.packet);
             } else {
                 let handle_clone = handle.clone();
                 thread::spawn(move || {
-                    thread::sleep(Duration::from_secs_f32(msg.time));
+                    let time_in_microsec = BigDecimal::from_str("1000000.00").unwrap() * msg.time.clone();
+                    let time_integer = time_in_microsec.to_u64().unwrap();
+                    thread::sleep(Duration::from_micros(time_integer));
                     handle_clone.lock().unwrap().send_to_server(msg.packet);
                     // TODO: Bit of a lifetime mess here - we actually want to call remove_running or even note_off
                     //  at this point but moving mut self is an issue...

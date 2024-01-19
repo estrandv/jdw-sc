@@ -126,7 +126,7 @@ fn main() {
             args: vec![
                 OscType::String("gentle".to_string()),
                 OscType::String("launch_ping".to_string()),
-                OscType::Float(0.5),
+                OscType::String("0.5".to_string()),
                 OscType::String("freq".to_string()),
                 OscType::Float(240.0)
             ]
