@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use bigdecimal::BigDecimal;
-use jdw_osc_lib::TimedOSCPacket;
+use jdw_osc_lib::model::TimedOSCPacket;
 
 use log::{debug, info, warn};
 use regex::Regex;
@@ -199,12 +199,11 @@ impl PlaySampleMessage {
             .get_buffer_number(&self.sample_pack, self.index, self.category.clone())
             .unwrap_or(0); // Should probably be some kind of error, but for now default to base buf
 
-
         if base_args.iter()
             .map(|arg| arg.clone())
             .find(|arg| arg.clone().string().is_some_and(|a| a == "buf"))
             .is_some() {
-            warn!("Sample play request contained a preset arg for 'buf' which can impact sample playback.");
+            warn!("Sample play request contained a preset arg for 'buf', which can impact sample playback.");
         }
 
         base_args.push(OscType::String("buf".to_string()));

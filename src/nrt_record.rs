@@ -2,7 +2,7 @@ use std::convert::TryInto;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use bigdecimal::BigDecimal;
-use jdw_osc_lib::TimedOSCPacket;
+use jdw_osc_lib::model::TimedOSCPacket;
 use log::{warn, debug};
 
 use rosc::{OscBundle, OscMessage, OscPacket, OscType};

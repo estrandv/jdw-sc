@@ -17,7 +17,7 @@ use rosc::{OscType, OscMessage, OscPacket};
 use std::cell::RefCell;
 use std::path::Path;
 use std::time::Duration;
-use jdw_osc_lib::TaggedBundle;
+use jdw_osc_lib::model::TaggedBundle;
 use log::{debug, error, info, LevelFilter, warn};
 use simple_logger::SimpleLogger;
 use crate::internal_osc_conversion::{IdRegistry, InternalOSCMorpher};
@@ -124,7 +124,7 @@ fn main() {
         NoteOnTimedMessage::new(&OscMessage {
             addr: "/note_on_timed".to_string(),
             args: vec![
-                OscType::String("gentle".to_string()),
+                OscType::String("default".to_string()),
                 OscType::String("launch_ping".to_string()),
                 OscType::String("0.5".to_string()),
                 OscType::String("freq".to_string()),
@@ -213,7 +213,10 @@ fn main() {
 
                 Ok(())
             }
-            else {
+            else if msg.addr == "/read_scd" {
+                self.sc_loop_client.lock().unwrap().send_to_client(msg);
+                Ok(())
+            } else {
 
                 // TODO: ... each unknown address will be forwarded straight to sc
                 // Main loop does not have a direct handle of supercollider.send_to_server...

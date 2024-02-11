@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime};
 use bigdecimal::{BigDecimal, ToPrimitive, Zero};
-use jdw_osc_lib::TimedOSCPacket;
+use jdw_osc_lib::model::TimedOSCPacket;
 
 use log::{debug, info, warn};
 use regex::{Error, Regex};
