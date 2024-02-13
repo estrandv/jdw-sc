@@ -4,11 +4,11 @@ This application manages a running instance of Supercollider (sclang, scsynth). 
 
 In order to enable more complete control over Supercollider it also provides custom functionality
 	such as:	
-	- A preloaded directory of user-defined synthdefs for easy synth creation
-	- A predefined structure for creating buffer-playable sample-packs as directories of samples
-	- A node_id registry based on OSC-provided external ids, allowing e.g. changing of playing synth args without
+	* A preloaded directory of user-defined synthdefs for easy synth creation
+	* A predefined structure for creating buffer-playable sample-packs as directories of samples
+	* A node_id registry based on OSC-provided external ids, allowing e.g. changing of playing synth args without
 		knowing nodeId
-	- Functions for playing samples by name, note_on with timed note_off, streamlined NRT recording,
+	* Functions for playing samples by name, note_on with timed note_off, streamlined NRT recording,
 		and more. 
 
 The general aim is to provide easier ways to interact with Supercollider via OSC, for example
