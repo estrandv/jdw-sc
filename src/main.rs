@@ -1,32 +1,33 @@
 #![feature(result_flattening)]
 
+use std::cell::RefCell;
+use std::path::Path;
+use std::process::exit;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use home::home_dir;
+use jdw_osc_lib::model::TaggedBundle;
+use jdw_osc_lib::osc_stack::OSCStack;
+use log::{debug, error, info, LevelFilter, warn};
+use rosc::{OscMessage, OscPacket, OscType};
+use simple_logger::SimpleLogger;
+use subprocess::{Exec, Popen, PopenConfig, Redirection};
+
+use crate::config::APPLICATION_IN_PORT;
+use crate::internal_osc_conversion::{IdRegistry, InternalOSCMorpher};
+use crate::osc_model::{NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage};
+use crate::samples::SampleDict;
+use crate::scd_templating::create_nrt_script;
+use crate::supercollider::Supercollider;
+
 mod supercollider;
 mod scd_templating;
 mod samples;
 mod osc_model;
-mod osc_client;
 mod nrt_record;
 mod config;
 mod internal_osc_conversion;
-
-use subprocess::{Exec, Redirection, Popen, PopenConfig};
-use std::process::exit;
-use std::sync::{Mutex, Arc};
-use crate::supercollider::{Supercollider};
-use rosc::{OscType, OscMessage, OscPacket};
-use std::cell::RefCell;
-use std::path::Path;
-use std::time::Duration;
-use jdw_osc_lib::model::TaggedBundle;
-use log::{debug, error, info, LevelFilter, warn};
-use simple_logger::SimpleLogger;
-use crate::internal_osc_conversion::{IdRegistry, InternalOSCMorpher};
-use crate::osc_client::OSCPoller;
-use crate::osc_model::{PlaySampleMessage, NoteOnTimedMessage, NoteModifyMessage, NoteOnMessage, NRTRecordMessage};
-use crate::samples::SampleDict;
-use crate::scd_templating::create_nrt_script;
-use home::home_dir;
-
 
 /*
     TODO: General refactoring of the whole main loop. 
@@ -133,181 +134,79 @@ fn main() {
         }).unwrap().as_osc(node_reg.clone())
     );
 
-    let mut osc_poller = OSCPoller::new();
-
-    let main_loop = MainLoop {
-        sc_loop_client: arc,
-        buffer_handle,
-        node_registry: Arc::new(Mutex::new(IdRegistry::new()))
-    };
+    let reg = Arc::new(Mutex::new(IdRegistry::new()));
 
     info!("Startup completed, polling for messages ...");
 
-    loop {
+    // TODO: Problem with "batch-send" tagged bundle (handle each contained message as incoming message9
+    //
+    OSCStack::init(config::get_addr(APPLICATION_IN_PORT))
+        .on_message("/note_on_timed", &|msg| {
+            let processed_message = NoteOnTimedMessage::new(&msg).unwrap();
+            Supercollider::send_timed(
+                arc.clone(),
+                processed_message.as_osc(reg.clone())
+            );
+        })
+        .on_message("/note_on", &|msg| {
+            let processed_message = NoteOnMessage::new(&msg).unwrap();
+            Supercollider::send_timed(
+                arc.clone(),
+                processed_message.as_osc(reg.clone())
+            );
+        })
+        .on_message("/play_sample", &|msg| {
+            let processed_message = PlaySampleMessage::new(&msg).unwrap();
+            let internal_msg = processed_message.into_internal(
+                buffer_handle.clone()
+            );
+            Supercollider::send_timed(
+                arc.clone(),
+                internal_msg.as_osc(reg.clone())
+            );
+        })
+        .on_message("/note_modify", &|msg| {
+            let processed_message = NoteModifyMessage::new(&msg).unwrap();
+            Supercollider::send_timed(
+                arc.clone(),
+                processed_message.as_osc(reg.clone())
+            );
+        })
+        .on_message("/read_scd", &|msg| {
+            arc.lock().unwrap().send_to_client(msg);
+        })
+        .on_tbundle("nrt_record", &|tagged_bundle| {
+            let nrt_record_msg = NRTRecordMessage::from_bundle(tagged_bundle);
 
-        // TODO: Unless all operations are lightning-fast there might be a need for a poller/processor pattern
-        // E.g. one thread polls and fills a buffer, the other eats through said buffer
-        // THis might also be relevant for the router
-        match osc_poller.poll() {
-            Ok(packet) => {
-                main_loop.process_osc(packet);
-            }
-            Err(e_str) => {
-                warn!("{}", &e_str);
-            }
-        };
+            match nrt_record_msg {
+                Ok(nrt_record) => {
 
-    }
+                    let nrt_result = nrt_record::get_nrt_record_scd(
+                        &nrt_record, buffer_handle.clone()
+                    ).unwrap();
 
-    struct MainLoop {
-        sc_loop_client: Arc<Mutex<Supercollider>>,
-        buffer_handle: Arc<Mutex<SampleDict>>,
-        node_registry: Arc<Mutex<IdRegistry>>,
-    }
+                    //println!("NRT\n\n: {}", &nrt_result);
 
-    impl MainLoop {
+                    arc.lock().unwrap().send_to_client(
+                        OscMessage {
+                            addr: "/read_scd".to_string(),
+                            args:  vec![OscType::String(nrt_result)]
+                        }
+                    );
 
-        fn handle_message(&self, msg: OscMessage) -> Result<(), String> {
-            // Handle with result to bring down duplicate code below
+                    // TODO: waiting works but is of course disruptive
+                    // (Tested: it is.)
+                    // What we do want eventually however is some kind of
+                    // "execute on message" that sends out a message to the
+                    // router that the file is created and exists at a path
 
-            if msg.addr == "/note_on_timed" {
-
-                let processed_message = NoteOnTimedMessage::new(&msg)?;
-                Supercollider::send_timed(
-                    self.sc_loop_client.clone(),
-                    processed_message.as_osc(self.node_registry.clone())
-                );
-
-                Ok(())
-
-            }
-            else if msg.addr == "/note_on" {
-                let processed_message = NoteOnMessage::new(&msg)?;
-                Supercollider::send_timed(
-                    self.sc_loop_client.clone(),
-                    processed_message.as_osc(self.node_registry.clone())
-                );
-
-                Ok(())
-            }
-            else if msg.addr == "/play_sample" {
-
-                let processed_message = PlaySampleMessage::new(&msg)?;
-                let internal_msg = processed_message.into_internal(
-                    self.buffer_handle.clone()
-                );
-                Supercollider::send_timed(
-                    self.sc_loop_client.clone(),
-                    internal_msg.as_osc(self.node_registry.clone())
-                );
-
-                Ok(())
-            }
-            else if msg.addr == "/note_modify" {
-                let processed_message = NoteModifyMessage::new(&msg)?;
-                Supercollider::send_timed(
-                    self.sc_loop_client.clone(),
-                    processed_message.as_osc(self.node_registry.clone())
-                );
-
-
-                Ok(())
-            }
-            else if msg.addr == "/read_scd" {
-                self.sc_loop_client.lock().unwrap().send_to_client(msg);
-                Ok(())
-            } else {
-
-                // TODO: ... each unknown address will be forwarded straight to sc
-                // Main loop does not have a direct handle of supercollider.send_to_server...
-                // It only has a nodemanager... which has a handle.
-                // Might be worth rethinking what does what in supercollider.rs
-                // ... but in the meantime this is not an important feature
-                // Also note: might there be client messages we want to send from outside?
-
-                Ok(())
-            }
-
-        }
-
-        fn process_osc(
-            &self,
-            packet: OscPacket
-        ) {
-            match packet {
-                OscPacket::Message(msg) => {
-
-                    debug!(">> Received OSC message for function/address: {} with args {:?}", msg.addr, msg.args);
-
-                    match self.handle_message(msg) {
-                        Ok(()) => {}
-                        Err(e) => {warn!("{}", e)}
-                    };
+                    //self.sc_loop_client.lock().unwrap()
+                    //    .wait_for("/nrt_done", vec![OscType::String("ok".to_string())], Duration::from_secs(10));
 
                 }
-                OscPacket::Bundle(bundle) => {
-
-                    debug!("OSC Bundle: {:?}", bundle);
-
-                    match TaggedBundle::new(&bundle) {
-                        Ok(tagged_bundle) => {
-                            info!("Parse of bundle successful: {:?}", tagged_bundle);
-
-                            if tagged_bundle.bundle_tag == "batch_send" {
-                                for sub_packet in tagged_bundle.contents {
-                                    debug!("Unpacking: {:?}", sub_packet.clone());
-                                    self.process_osc(sub_packet);
-                                }
-                            }
-                            else if tagged_bundle.bundle_tag == "nrt_record" {
-                                let nrt_record_msg = NRTRecordMessage::from_bundle(tagged_bundle);
-
-                                match nrt_record_msg {
-                                    Ok(nrt_record) => {
-
-                                        let nrt_result = nrt_record::get_nrt_record_scd(
-                                            &nrt_record, self.buffer_handle.clone()
-                                        ).unwrap();
-
-                                        //println!("NRT\n\n: {}", &nrt_result);
-
-                                        self.sc_loop_client.lock().unwrap().send_to_client(
-                                            OscMessage {
-                                                addr: "/read_scd".to_string(),
-                                                args:  vec![OscType::String(nrt_result)]
-                                            }
-                                        );
-
-                                        // TODO: waiting works but is of course disruptive
-                                        // (Tested: it is.)
-                                        // What we do want eventually however is some kind of
-                                        // "execute on message" that sends out a message to the
-                                        // router that the file is created and exists at a path
-
-                                        //self.sc_loop_client.lock().unwrap()
-                                        //    .wait_for("/nrt_done", vec![OscType::String("ok".to_string())], Duration::from_secs(10));
-
-                                    }
-                                    Err(e) => {warn!("{}", e)}
-                                }
-
-                            } else {
-                                warn!("Unknown tagged bundle received, ignoring...");
-                            }
-
-                        }
-                        Err(e) => {
-                            // NOTE: Raw bundles should technically be passed straight to
-                            // scsynth or parsed recursively
-                            warn!("Failed to parse passe bundle into a tagged bundle {}", e);
-                        }
-                    }
-                }
+                Err(e) => {warn!("{}", e)}
             }
-        }
-    }
-
-
-
+        })
+        .begin();
 
 }

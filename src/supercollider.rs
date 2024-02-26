@@ -109,25 +109,34 @@ impl Supercollider {
 
         for msg in msgs {
             if msg.time == BigDecimal::zero() {
-                // TODO: No need for threading. Internal timing can be added to latency just as well
-                //  if we add latency on this level and send it as a parameter
-                handle.lock().unwrap().send_to_server(msg.packet);
+                handle.lock().unwrap().send_to_server_timed(msg.packet, config::LATENCY_MS);
             } else {
-                let handle_clone = handle.clone();
-                thread::spawn(move || {
-                    let time_in_microsec = BigDecimal::from_str("1000000.00").unwrap() * msg.time.clone();
-                    let time_integer = time_in_microsec.to_u64().unwrap();
-                    thread::sleep(Duration::from_micros(time_integer));
-                    handle_clone.lock().unwrap().send_to_server(msg.packet);
-                    // TODO: Bit of a lifetime mess here - we actually want to call remove_running or even note_off
-                    //  at this point but moving mut self is an issue...
-                    // If running notes member is converted to refcell we can cheat the &mut self of remove_running
-                    // Also note that we should technically remove it after release time rather than immediately on gate
-                    // ... which kinda also means that "rel" arg should be elevated to a message-level arg... but
-                    // that is shaky territory.
-                });
+                // Tell supercollider to execute the message after a delay
+                let time_in_ms = BigDecimal::from_str("1000.00").unwrap() * msg.time.clone();
+                let time_integer = time_in_ms.to_u64().unwrap();
+                handle.lock().unwrap().send_to_server_timed(msg.packet, config::LATENCY_MS + time_integer);
             }
         }
+    }
+
+    pub fn send_to_server_timed(&self, msg: OscPacket, delay_ms: u64) {
+        // TODO: Trying out some latency adjustments to fix desync issues
+        // This is not the optimal way - these operations are highly reliant on context
+
+        let now = SystemTime::now() + Duration::from_millis(delay_ms);
+
+        use std::convert::TryFrom;
+        let bundle = OscBundle {
+            timetag: OscTime::try_from(now).unwrap(),
+            content: vec![msg]
+        };
+
+        let packet = OscPacket::Bundle(bundle);
+
+        // NOTE: Used to just send &msg here
+        let msg_buf = encoder::encode(&packet).unwrap();
+
+        self.osc_socket.send_to(&msg_buf, self.scsynth_out_addr).unwrap();
     }
 
     pub fn send_to_server(&self, msg: OscPacket) {
