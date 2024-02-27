@@ -138,8 +138,6 @@ fn main() {
 
     info!("Startup completed, polling for messages ...");
 
-    // TODO: Problem with "batch-send" tagged bundle (handle each contained message as incoming message9
-    //
     OSCStack::init(config::get_addr(APPLICATION_IN_PORT))
         .on_message("/note_on_timed", &|msg| {
             let processed_message = NoteOnTimedMessage::new(&msg).unwrap();
@@ -185,8 +183,6 @@ fn main() {
                         &nrt_record, buffer_handle.clone()
                     ).unwrap();
 
-                    //println!("NRT\n\n: {}", &nrt_result);
-
                     arc.lock().unwrap().send_to_client(
                         OscMessage {
                             addr: "/read_scd".to_string(),
@@ -194,19 +190,13 @@ fn main() {
                         }
                     );
 
-                    // TODO: waiting works but is of course disruptive
-                    // (Tested: it is.)
-                    // What we do want eventually however is some kind of
-                    // "execute on message" that sends out a message to the
-                    // router that the file is created and exists at a path
-
-                    //self.sc_loop_client.lock().unwrap()
-                    //    .wait_for("/nrt_done", vec![OscType::String("ok".to_string())], Duration::from_secs(10));
+                    // TODO: Do something with the /nrt_done message
 
                 }
                 Err(e) => {warn!("{}", e)}
             }
         })
+        .funnel_tbundle("batch-send")
         .begin();
 
 }

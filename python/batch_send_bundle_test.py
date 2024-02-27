@@ -16,18 +16,20 @@ def add_msg(addr, args):
         msg.add_arg(arg)
     bundle.add_content(msg.build())
 
-add_msg("/bundle_info", ["batch_send"])
+add_msg("/bundle_info", ["batch-send"])
 
-for i in range(1, 3):
+for i in range(1, 2):
     add_msg("/note_on_timed", [
         "brute",
         "brute_TEST_HOLD_" + str(i),
-        0.2 + (0.2 * i), # gate time
+        "0.4", # gate time
         "freq",
-        195.0 + (4.4 * i)
+        195.0 + (195.0 * (i)),
+        "relT",
+        0.2 + (i * 1.2)
     ])
 
-add_msg("/play_sample", ["example_id_lol", "example", 1, ""])
+add_msg("/play_sample", ["example_id_lol", "example", 47, ""])
 
 # Should work
 client.send(bundle.build())
