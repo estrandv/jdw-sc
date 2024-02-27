@@ -1,7 +1,7 @@
 #![feature(result_flattening)]
 
 use std::cell::RefCell;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -15,11 +15,12 @@ use simple_logger::SimpleLogger;
 use subprocess::{Exec, Popen, PopenConfig, Redirection};
 
 use crate::config::APPLICATION_IN_PORT;
-use crate::internal_osc_conversion::{IdRegistry, InternalOSCMorpher};
+use crate::internal_osc_conversion::{InternalOSCMorpher};
 use crate::osc_model::{NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage};
 use crate::samples::SampleDict;
 use crate::scd_templating::create_nrt_script;
-use crate::supercollider::Supercollider;
+use crate::supercollider::SCProcessManager;
+use crate::node_lookup::NodeIDRegistry;
 
 mod supercollider;
 mod scd_templating;
@@ -28,6 +29,7 @@ mod osc_model;
 mod nrt_record;
 mod config;
 mod internal_osc_conversion;
+mod node_lookup;
 
 /*
     TODO: General refactoring of the whole main loop. 
@@ -48,23 +50,31 @@ fn main() {
     /*
         Prepare thread handler for the main supercollider instance
      */
-    let handler = Supercollider::new();
-    let arc = Arc::new(Mutex::new(handler));
-    let arc_in_ctrlc = arc.clone();
+    let sc_process_manager = SCProcessManager::new();
+    let sc_arc = Arc::new(Mutex::new(sc_process_manager));
+    let sc_arc_in_ctrlc = sc_arc.clone();
 
     // Terminate supercollider on ctrl+c
     ctrlc::set_handler(move || {
         info!("Thread abort requested");
-        arc_in_ctrlc.lock().unwrap().terminate();
+        sc_arc_in_ctrlc.lock().unwrap().terminate();
         exit(0);
     }).expect("Error setting Ctrl-C handler");
 
     /*
         Wait for the custom /init message from the server (see start_server.scd).
-        TODO: Does the application crash on timeout? Some kind of handling/termination is needed.
      */
-    arc.lock().unwrap()
-        .wait_for("/init", vec![OscType::String("ok".to_string())], Duration::from_secs(10));
+    match sc_arc.lock().unwrap().await_response(
+        "/init",
+        vec![OscType::String("ok".to_string())],
+        Duration::from_secs(10),
+    ) {
+        Err(e) => {
+            error!("{}", e);
+            sc_arc.lock().unwrap().terminate();
+        },
+        Ok(()) => ()
+    };
 
     info!("Server online!");
 
@@ -75,11 +85,11 @@ fn main() {
     let synth_defs = scd_templating::read_all_synths("add;");
 
     // See start_server.scd for the /read_scd definition
-    for def in synth_defs {
-        arc.lock().unwrap().send_to_client(
+    for synth_def in synth_defs {
+        sc_arc.lock().unwrap().send_to_client(
             OscMessage {
                 addr: "/read_scd".to_string(),
-                args:  vec![OscType::String(def)]
+                args: vec![OscType::String(synth_def)],
             }
         )
     }
@@ -89,114 +99,120 @@ fn main() {
         The sample dict struct keeps track of which buffer index belongs to which sample pack.
      */
 
-    let mut home_dir = home_dir().unwrap();
-    home_dir.push("sample_packs");
+    let mut sample_pack_dir = home_dir().unwrap();
+    sample_pack_dir.push("sample_packs");
 
-    let buffer_data = samples::SampleDict::from_dir(&home_dir).unwrap_or_else(|e| {
+    let sample_dict = SampleDict::from_dir(&sample_pack_dir).unwrap_or_else(|e| {
         error!("Unable to read buffer data: {} - no samples will be provided", e);
         SampleDict::dummy()
     });
 
-    let buffer_handle = Arc::new(Mutex::new(buffer_data));
-    let buffer_string = buffer_handle.clone().lock().unwrap().to_buffer_load_scd();
+    let buffer_string = sample_dict.to_buffer_load_scd();
+
+    let sample_dict_arc = Arc::new(Mutex::new(sample_dict));
 
     if !buffer_string.is_empty() {
-
-        arc.lock().unwrap().send_to_client(
+        sc_arc.lock().unwrap().send_to_client(
             OscMessage {
                 addr: "/read_scd".to_string(),
-                args:  vec![OscType::String(buffer_string)]
+                args: vec![OscType::String(buffer_string)],
             }
         );
 
         // Message is added to the end of the buffer load scd to signify a completed load call.
-        // TODO: Does this trigger? Is it accurate? There was a note previously to remove it. Also error handling...
-        arc.lock().unwrap().wait_for("/buffers_loaded", vec![OscType::String("ok".to_string())], Duration::from_secs(10));
-
+        match sc_arc.lock().unwrap()
+            .await_response(
+                "/buffers_loaded",
+                vec![OscType::String("ok".to_string())],
+                Duration::from_secs(10),
+            ) {
+            Err(e) => {
+                error!("{}", e);
+                sc_arc.lock().unwrap().terminate();
+            },
+            Ok(()) => ()
+        };
     }
 
     ///////////////////////////
 
 
-    let node_reg = Arc::new(Mutex::new(IdRegistry::new()));
+    let node_reg = Arc::new(Mutex::new(NodeIDRegistry::new()));
 
     // Play a welcoming ping in a really obtuse way.
-    Supercollider::send_timed(arc.clone(),
-        NoteOnTimedMessage::new(&OscMessage {
-            addr: "/note_on_timed".to_string(),
-            args: vec![
-                OscType::String("default".to_string()),
-                OscType::String("launch_ping".to_string()),
-                OscType::String("0.5".to_string()),
-                OscType::String("freq".to_string()),
-                OscType::Float(240.0)
-            ]
-        }).unwrap().as_osc(node_reg.clone())
+    SCProcessManager::send_timed(sc_arc.clone(),
+                                 NoteOnTimedMessage::new(&OscMessage {
+                                     addr: "/note_on_timed".to_string(),
+                                     args: vec![
+                                         OscType::String("default".to_string()),
+                                         OscType::String("launch_ping".to_string()),
+                                         OscType::String("0.5".to_string()),
+                                         OscType::String("freq".to_string()),
+                                         OscType::Float(240.0),
+                                     ],
+                                 }).unwrap().as_osc(node_reg.clone()),
     );
 
-    let reg = Arc::new(Mutex::new(IdRegistry::new()));
+    let reg = Arc::new(Mutex::new(NodeIDRegistry::new()));
 
     info!("Startup completed, polling for messages ...");
 
     OSCStack::init(config::get_addr(APPLICATION_IN_PORT))
         .on_message("/note_on_timed", &|msg| {
             let processed_message = NoteOnTimedMessage::new(&msg).unwrap();
-            Supercollider::send_timed(
-                arc.clone(),
-                processed_message.as_osc(reg.clone())
+            SCProcessManager::send_timed(
+                sc_arc.clone(),
+                processed_message.as_osc(reg.clone()),
             );
         })
         .on_message("/note_on", &|msg| {
             let processed_message = NoteOnMessage::new(&msg).unwrap();
-            Supercollider::send_timed(
-                arc.clone(),
-                processed_message.as_osc(reg.clone())
+            SCProcessManager::send_timed(
+                sc_arc.clone(),
+                processed_message.as_osc(reg.clone()),
             );
         })
         .on_message("/play_sample", &|msg| {
             let processed_message = PlaySampleMessage::new(&msg).unwrap();
-            let internal_msg = processed_message.into_internal(
-                buffer_handle.clone()
+            let internal_msg = processed_message.with_buffer_arg(
+                sample_dict_arc.clone()
             );
-            Supercollider::send_timed(
-                arc.clone(),
-                internal_msg.as_osc(reg.clone())
+            SCProcessManager::send_timed(
+                sc_arc.clone(),
+                internal_msg.as_osc(reg.clone()),
             );
         })
         .on_message("/note_modify", &|msg| {
             let processed_message = NoteModifyMessage::new(&msg).unwrap();
-            Supercollider::send_timed(
-                arc.clone(),
-                processed_message.as_osc(reg.clone())
+            SCProcessManager::send_timed(
+                sc_arc.clone(),
+                processed_message.as_osc(reg.clone()),
             );
         })
         .on_message("/read_scd", &|msg| {
-            arc.lock().unwrap().send_to_client(msg);
+            sc_arc.lock().unwrap().send_to_client(msg);
         })
         .on_tbundle("nrt_record", &|tagged_bundle| {
             let nrt_record_msg = NRTRecordMessage::from_bundle(tagged_bundle);
 
             match nrt_record_msg {
                 Ok(nrt_record) => {
-
                     let nrt_result = nrt_record::get_nrt_record_scd(
-                        &nrt_record, buffer_handle.clone()
+                        &nrt_record, sample_dict_arc.clone(),
                     ).unwrap();
 
-                    arc.lock().unwrap().send_to_client(
+                    sc_arc.lock().unwrap().send_to_client(
                         OscMessage {
                             addr: "/read_scd".to_string(),
-                            args:  vec![OscType::String(nrt_result)]
+                            args: vec![OscType::String(nrt_result)],
                         }
                     );
 
                     // TODO: Do something with the /nrt_done message
-
                 }
-                Err(e) => {warn!("{}", e)}
+                Err(e) => { warn!("{}", e) }
             }
         })
         .funnel_tbundle("batch-send")
         .begin();
-
 }

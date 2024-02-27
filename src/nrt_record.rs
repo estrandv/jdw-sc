@@ -7,8 +7,9 @@ use log::{warn, debug};
 
 use rosc::{OscBundle, OscMessage, OscPacket, OscType};
 
-use crate::{create_nrt_script, IdRegistry, InternalOSCMorpher, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage, SampleDict, scd_templating};
+use crate::{create_nrt_script, InternalOSCMorpher, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage, SampleDict, scd_templating};
 use crate::samples::Sample;
+use crate::node_lookup::NodeIDRegistry;
 
 impl Sample {
     // Buffer load as-osc, suitable for loading into the NRT server
@@ -27,7 +28,7 @@ impl Sample {
 
 
 struct NRTPacketConverter {
-    reg_handle: Arc<Mutex<IdRegistry>>,
+    reg_handle: Arc<Mutex<NodeIDRegistry>>,
     buffer_handle: Arc<Mutex<SampleDict>>,
     current_beat: BigDecimal,
 }
@@ -46,7 +47,7 @@ impl NRTPacketConverter {
                 .as_nrt_osc(self.reg_handle.clone(), self.current_beat.clone())
         } else if msg.addr == "/play_sample" {
             let processed_message = PlaySampleMessage::new(msg).unwrap();
-            processed_message.into_internal(
+            processed_message.with_buffer_arg(
                 self.buffer_handle.clone()
             ).as_nrt_osc(self.reg_handle.clone(), self.current_beat.clone())
         } else if msg.addr == "/note_modify" {
@@ -98,7 +99,7 @@ impl NRTRecordMessage {
         &self,
         buffer_handle: Arc<Mutex<SampleDict>>,
     ) -> Vec<TimedOSCPacket> {
-        let registry = IdRegistry::new();
+        let registry = NodeIDRegistry::new();
         let reg_handle = Arc::new(Mutex::new(registry));
 
         let mut processor = NRTPacketConverter {

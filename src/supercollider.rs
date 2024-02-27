@@ -1,7 +1,7 @@
 use std::{fs, thread};
 use std::cell::RefCell;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Empty, Write};
 use std::net::{SocketAddrV4, UdpSocket};
 use std::path::Path;
 use std::str::FromStr;
@@ -38,16 +38,16 @@ fn get_arg(args: Vec<OscType>, arg_name: &str) -> Option<OscType> {
 
 }
 
-pub struct Supercollider {
+pub struct SCProcessManager {
     sclang_process: Popen,
     osc_socket: UdpSocket,
     sclang_out_addr: SocketAddrV4,
     scsynth_out_addr: SocketAddrV4,
 }
 
-impl Supercollider {
+impl SCProcessManager {
     // TODO: Do result. Shut down application on any bind failures.
-    pub fn new() -> Supercollider {
+    pub fn new() -> SCProcessManager {
 
         // TODO: Error handling
         // TODO: General temp folder management should be its own little util
@@ -88,7 +88,7 @@ impl Supercollider {
         // Seems to also enable ctrl+c interrupt for some reason.
         incoming_socket.set_read_timeout(Option::Some(Duration::from_secs(SC_SERVER_INCOMING_READ_TIMEOUT)));
 
-        Supercollider {
+        SCProcessManager {
             sclang_process: process,
             osc_socket: incoming_socket,
             sclang_out_addr: sclang_addr,
@@ -105,7 +105,7 @@ impl Supercollider {
         self.sclang_process.terminate();
     }
 
-    pub fn send_timed(handle: Arc<Mutex<Supercollider>>, msgs: Vec<TimedOSCPacket>) {
+    pub fn send_timed(handle: Arc<Mutex<SCProcessManager>>, msgs: Vec<TimedOSCPacket>) {
 
         for msg in msgs {
             if msg.time == BigDecimal::zero() {
@@ -168,7 +168,7 @@ impl Supercollider {
         self.osc_socket.send_to(&msg_buf, self.sclang_out_addr).unwrap();
     }
 
-    pub fn wait_for(&self, message_name: &str, args: Vec<OscType>, timeout: Duration) {
+    pub fn await_response(&self, message_name: &str, args: Vec<OscType>, timeout: Duration) -> Result<(), String> {
 
         let start_time = Instant::now();
 
@@ -178,8 +178,11 @@ impl Supercollider {
 
         loop {
 
+            // TODO: Timeout does not work for recv_from - if no messages arrive at all it will forever-loop
+            //  The internal timeout arg only works for when other messages arrive consistently until timeout
+            //self.osc_socket.set_read_timeout(Some(Duration::from_secs(1))).unwrap()
             match self.osc_socket.recv_from(&mut buf) {
-                Ok((size, addr)) => {
+                Ok((size, _addr)) => {
                     let (_, packet) = rosc::decoder::decode_udp(&buf[..size]).unwrap();
 
                     match packet {
@@ -187,7 +190,7 @@ impl Supercollider {
 
                             if  msg.addr == message_name && args == msg.args {
                                 info!(">> Awaited message received! Continuing ...");
-                                break;
+                                return Ok(());
                             } else {
                                 debug!("Received message not the waited for one, continuing wait...");
                             }
@@ -196,8 +199,7 @@ impl Supercollider {
                     }
                 }
                 Err(e) => {
-                    warn!(">> Error receiving from socket: {}", e);
-                    break;
+                    return Err(format!(">> Error receiving from socket: {}", e));
                 }
             }
 
@@ -206,11 +208,10 @@ impl Supercollider {
             debug!("Elapsed: {:?}, timeout: {:?}", elapsed.clone(), timeout.clone());
 
             if elapsed > timeout {
-                warn!(">> Timed out waiting for {}", message_name);
-                break;
+                return Err(format!(">> Timed out waiting for {}", message_name));
             }
 
-            std::thread::sleep(Duration::from_millis(10));
+            thread::sleep(Duration::from_millis(10));
         }
 
     }
