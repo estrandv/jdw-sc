@@ -3,6 +3,7 @@
     Sorts samples in pack by category using very barebones keyword detection on filenames.
  */
 use std::collections::HashMap;
+
 use crate::samples::Sample;
 
 pub struct SampleCategoryDict {

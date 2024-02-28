@@ -1,15 +1,17 @@
-use std::path::{Path, PathBuf};
-use std::fs;
 use std::collections::HashMap;
 use std::fmt::format;
+use std::fs;
 use std::io::Error;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+
 use log::{debug, info, warn};
 use rosc::OscType;
+
 use crate::config::{SERVER_NAME, SERVER_OSC_SOCKET_NAME};
 use crate::PlaySampleMessage;
+use crate::sample_sorting::SampleCategoryDict;
 use crate::util::Counter;
-use crate::sample_sorting::{SampleCategoryDict};
 
 #[derive(Debug, Clone)]
 pub struct Sample {

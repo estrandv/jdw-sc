@@ -1,8 +1,10 @@
-use std::fs::DirEntry;
-use std::{io, fs};
+use std::{fs, io};
 use std::fmt::format;
+use std::fs::DirEntry;
 use std::path::Path;
+
 use log::{debug, info};
+
 use crate::config::{APPLICATION_IP, SERVER_IN_PORT, SERVER_NAME, SERVER_OSC_SOCKET_NAME, SERVER_OUT_PORT, SUPERCOLLIDER_MEMORY_BYTES};
 
 pub fn create_nrt_script(
@@ -12,7 +14,7 @@ pub fn create_nrt_script(
     message_scd_rows: Vec<String>
 ) -> Result<String, String> {
 
-    let mut text = fs::read_to_string(Path::new("src/scd/nrt_record.scd"))
+    let mut text = fs::read_to_string(Path::new("src/scd/nrt_record.scd.template"))
         .map_err(|e| format!("{}", e))?;
 
     let score_row = message_scd_rows.join(",\n");
@@ -30,8 +32,8 @@ pub fn create_nrt_script(
 }
 
 pub fn create_boot_script() -> Result<String, String> {
-    let mut text = fs::read_to_string(Path::new("src/scd/start_server.scd"))
-        .map_err(|e| format!("{}", e))?;
+    let mut text = fs::read_to_string(Path::new("src/scd/start_server.scd.template"))
+        .map_err(|e| format!("Boot script templating failed: {}", e))?;
     text = text.replace("{:server_out_port}", &SERVER_OUT_PORT.to_string());
     text = text.replace("{:server_in_port}", &SERVER_IN_PORT.to_string());
     text = text.replace("{:application_ip}", APPLICATION_IP);

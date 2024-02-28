@@ -23,7 +23,7 @@ bundle.add_content(msg2.build())
 rows_bundle = osc_bundle_builder.OscBundleBuilder(osc_bundle_builder.IMMEDIATELY)
 
 def add_msg(time, addr, args):
-    args = ["gentle", "gentle_nrt_id"] + args
+    args = ["brute", "gentle_nrt_id"] + args
     bun = osc_bundle_builder.OscBundleBuilder(osc_bundle_builder.IMMEDIATELY)
     top_msg = osc_message_builder.OscMessageBuilder(address="/bundle_info")
     top_msg.add_arg("timed_msg")

@@ -1,28 +1,28 @@
 use std::convert::TryInto;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+
 use bigdecimal::BigDecimal;
 use jdw_osc_lib::model::TimedOSCPacket;
-use log::{warn, debug};
-
+use log::{debug, error, warn};
 use rosc::{OscBundle, OscMessage, OscPacket, OscType};
 
-use crate::{create_nrt_script, SuperColliderMessage, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage, SamplePackCollection, scd_templating};
-use crate::samples::Sample;
+use crate::{create_nrt_script, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage, SamplePackCollection, scd_templating, SuperColliderMessage};
 use crate::node_lookup::NodeIDRegistry;
+use crate::samples::Sample;
 
 impl Sample {
     // Buffer load as-osc, suitable for loading into the NRT server
     pub fn to_nrt_scd_row(&self, dir: &str) -> String {
         // TODO: TEmplate-friendly pieces
-        // TODO: Used to do relative paths like this: File.getcwd +/+
+        // NOTE: If you want relative paths in scd you can do: File.getcwd +/+
         let ret = format!(
             "[0.0, (Buffer.new(server, 44100 * 8.0, 2, bufnum: {})).allocReadMsg(\"{}\")]",
             self.buffer_nr,
             dir.to_string() + "/" + &self.file_name.to_string(),
         );
 
-        ret 
+        ret
     }
 }
 
@@ -34,30 +34,40 @@ struct NRTPacketConverter {
 }
 
 impl NRTPacketConverter {
-
     fn process_msg(&self, msg: &OscMessage) -> Vec<TimedOSCPacket> {
-        // TODO: Match refactor
-        return if msg.addr == "/note_on_timed" {
-            let res = NoteOnTimedMessage::new(&msg.clone());
-            res.unwrap()
-                .as_nrt_osc(self.reg_handle.clone(), self.current_beat.clone())
-        } else if msg.addr == "/note_on" {
-            NoteOnMessage::new(msg)
-                .unwrap()
-                .as_nrt_osc(self.reg_handle.clone(), self.current_beat.clone())
-        } else if msg.addr == "/play_sample" {
-            let processed_message = PlaySampleMessage::new(msg).unwrap();
-            processed_message.with_buffer_arg(
-                self.buffer_handle.clone()
-            ).as_nrt_osc(self.reg_handle.clone(), self.current_beat.clone())
-        } else if msg.addr == "/note_modify" {
-            // TODO: Must the handles really be cloned?
-            NoteModifyMessage::new(msg)
-                .unwrap()
-                .as_nrt_osc(self.reg_handle.clone(), self.current_beat.clone())
-        } else {
-            vec![] // TODO: Wrap in some default handler - important part is using current_time
-        };
+
+        let beat = self.current_beat.clone();
+        let registry = self.reg_handle.clone();
+
+        match msg.addr.as_str() {
+            "/note_on_timed" => {
+                NoteOnTimedMessage::new(&msg.clone())
+                    .unwrap()
+                    .as_nrt_osc(registry, beat)
+            }
+            "/play_sample" => {
+                PlaySampleMessage::new(msg)
+                    .unwrap()
+                    .with_buffer_arg(
+                        self.buffer_handle.clone()
+                    )
+                    .as_nrt_osc(registry, beat)
+            }
+            "/note_on" => {
+                NoteOnMessage::new(msg)
+                    .unwrap()
+                    .as_nrt_osc(registry, beat)
+            }
+            "/note_modify" => {
+                NoteModifyMessage::new(msg)
+                    .unwrap()
+                    .as_nrt_osc(registry, beat)
+            }
+            _ => {
+                error!("UNKNOWN NRT MSG");
+                vec![] // TODO: Wrap in some default handler - important part is using current_time
+            }
+        }
     }
 
     fn process_packet(&self, timed_packet: &TimedOSCPacket) -> Vec<TimedOSCPacket> {
@@ -69,7 +79,7 @@ impl NRTPacketConverter {
                 warn!("NRT support for timed bundles not yet implemented");
                 vec![]
             }
-        }
+        };
     }
 
     fn process_packets(&mut self, packets: &Vec<TimedOSCPacket>) -> Vec<TimedOSCPacket> {
@@ -89,7 +99,6 @@ impl NRTPacketConverter {
 
         result_vector
     }
-
 }
 
 impl NRTRecordMessage {
@@ -105,11 +114,10 @@ impl NRTRecordMessage {
         let mut processor = NRTPacketConverter {
             reg_handle,
             buffer_handle,
-            current_beat: BigDecimal::from_str("0.0").unwrap()
+            current_beat: BigDecimal::from_str("0.0").unwrap(),
         };
 
         processor.process_packets(&self.messages)
-
     }
 }
 
@@ -124,8 +132,8 @@ impl NRTConvert for TimedOSCPacket {
 
         // TODO: Gonna cheat here for now. We're supposed to do the whole processor routine...
         let msg = match &self.packet {
-            OscPacket::Message(msg) => {Some(msg.clone())}
-            OscPacket::Bundle(_) => {None}
+            OscPacket::Message(msg) => { Some(msg.clone()) }
+            OscPacket::Bundle(_) => { None }
         };
 
         let args: Vec<_> = msg.clone().unwrap().args.iter()
@@ -156,7 +164,6 @@ impl NRTConvert for TimedOSCPacket {
         row_template = row_template.replace("{:args}", &arg_string);
 
         row_template
-
     }
 }
 
@@ -176,7 +183,7 @@ pub fn get_nrt_record_scd(msg: &NRTRecordMessage, buffer_handle: Arc<Mutex<Sampl
     let synthdefs = scd_templating::read_all_synths("asBytes");
 
     let synth_rows: Vec<_> = synthdefs.iter()
-        .map(|def | {return scd_templating::nrt_wrap_synthdef(def)})
+        .map(|def| { return scd_templating::nrt_wrap_synthdef(def); })
         .collect();
 
     let mut all_nrt_rows: Vec<String> = vec![];
@@ -188,7 +195,7 @@ pub fn get_nrt_record_scd(msg: &NRTRecordMessage, buffer_handle: Arc<Mutex<Sampl
         msg.bpm,
         &msg.file_name,
         msg.end_beat,
-        all_nrt_rows
+        all_nrt_rows,
     )
 }
 

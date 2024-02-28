@@ -3,16 +3,15 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+
 use bigdecimal::BigDecimal;
 use jdw_osc_lib::model::TimedOSCPacket;
-
 use log::{debug, info, warn};
 use regex::Regex;
 use rosc::{OscMessage, OscPacket, OscType};
 
 use crate::{NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, PlaySampleMessage, SamplePackCollection};
 use crate::node_lookup::NodeIDRegistry;
-
 
 pub trait SuperColliderMessage {
     fn as_osc(&self, reg: Arc<Mutex<NodeIDRegistry>>) -> Vec<TimedOSCPacket>;

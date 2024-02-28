@@ -1,4 +1,4 @@
-use log::{LevelFilter};
+use log::LevelFilter;
 
 /*
     Central place for application configuration until we decide on a non-hardcode method
@@ -11,7 +11,7 @@ pub const SERVER_NAME: &str = "s";
 
 pub const SC_SERVER_INCOMING_READ_TIMEOUT: u64 = 30;
 
-// Portconfig note: the server ports need templating in start_server.scd to be changeable
+// Portconfig note: the server ports need templating in start_server.scd.template to be changeable
 pub const SERVER_OUT_PORT: i32 = 13338;
 pub const SCLANG_IN_PORT: i32 = 13336;
 pub const SERVER_IN_PORT: i32 = 13337;

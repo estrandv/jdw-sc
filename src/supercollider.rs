@@ -8,9 +8,9 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime};
+
 use bigdecimal::{BigDecimal, ToPrimitive, Zero};
 use jdw_osc_lib::model::TimedOSCPacket;
-
 use log::{debug, info, warn};
 use regex::{Error, Regex};
 use rosc::{encoder, OscBundle, OscMessage, OscPacket, OscTime, OscType};
@@ -46,25 +46,35 @@ pub struct SCProcessManager {
 }
 
 impl SCProcessManager {
-    // TODO: Do result. Shut down application on any bind failures.
-    pub fn new() -> SCProcessManager {
+    pub fn new() -> Result<SCProcessManager, Box<dyn std::error::Error>> {
 
-        // TODO: Error handling
         // TODO: General temp folder management should be its own little util
-        let templated = scd_templating::create_boot_script().unwrap();
+        // TODO: ... and use home folder instead
+
+        info!("Generating boot script");
+
+        let templated = scd_templating::create_boot_script()?;
+
+        info!("Creating temp dir");
+
         let temp_dir = Path::new("temp");
         if !temp_dir.exists() {
-            fs::create_dir(Path::new("temp")).unwrap();
+            fs::create_dir(Path::new("temp"))?;
         }
-        let mut file = File::create("temp/start_server.scd").unwrap();
-        file.write_all(templated.as_bytes()).unwrap();
+
+        info!("Creating server boot script temp file");
+
+        let mut file = File::create("temp/start_server.scd")?;
+        file.write_all(templated.as_bytes())?;
+
+        info!("Starting supercollider with generated boot script");
 
         let mut process = Popen::create(
             &["sclang", "temp/start_server.scd", "-u", &SCLANG_IN_PORT.to_string()],
             PopenConfig { stdout: Redirection::Merge, ..Default::default() }
-        ).unwrap();
+        )?;
 
-        // Note: this port is targeted by start_server.scd
+        // Note: this port is targeted by start_server.scd.template
         // Note: Technically the second UDP in socket managed by the application,
         // the other being the public in-port used to send messages to jdw-sc
         let recv_addr = match SocketAddrV4::from_str(&config::get_addr(SERVER_OUT_PORT)) {
@@ -72,7 +82,7 @@ impl SCProcessManager {
             Err(_) => panic!("Error binding incoming osc address"),
         };
 
-        let incoming_socket = UdpSocket::bind(recv_addr).unwrap();
+        let incoming_socket = UdpSocket::bind(recv_addr)?;
 
         let scsynth_addr = match SocketAddrV4::from_str(&config::get_addr(SERVER_IN_PORT)) {
             Ok(addr) => addr,
@@ -88,12 +98,12 @@ impl SCProcessManager {
         // Seems to also enable ctrl+c interrupt for some reason.
         incoming_socket.set_read_timeout(Option::Some(Duration::from_secs(SC_SERVER_INCOMING_READ_TIMEOUT)));
 
-        SCProcessManager {
+        Ok(SCProcessManager {
             sclang_process: process,
             osc_socket: incoming_socket,
             sclang_out_addr: sclang_addr,
             scsynth_out_addr: scsynth_addr,
-        }
+        })
     }
 
     pub fn is_alive(&mut self) -> bool {
@@ -102,24 +112,24 @@ impl SCProcessManager {
 
     pub fn terminate(&mut self) {
         info!("Exiting sclang...");
-        self.sclang_process.terminate();
+        self.sclang_process.terminate().unwrap();
     }
 
-    pub fn send_timed(handle: Arc<Mutex<SCProcessManager>>, msgs: Vec<TimedOSCPacket>) {
+    pub fn send_timed_packets(handle: Arc<Mutex<SCProcessManager>>, msgs: Vec<TimedOSCPacket>) {
 
         for msg in msgs {
             if msg.time == BigDecimal::zero() {
-                handle.lock().unwrap().send_to_server_timed(msg.packet, config::LATENCY_MS);
+                handle.lock().unwrap().send_with_delay(msg.packet, config::LATENCY_MS);
             } else {
                 // Tell supercollider to execute the message after a delay
                 let time_in_ms = BigDecimal::from_str("1000.00").unwrap() * msg.time.clone();
                 let time_integer = time_in_ms.to_u64().unwrap();
-                handle.lock().unwrap().send_to_server_timed(msg.packet, config::LATENCY_MS + time_integer);
+                handle.lock().unwrap().send_with_delay(msg.packet, config::LATENCY_MS + time_integer);
             }
         }
     }
 
-    pub fn send_to_server_timed(&self, msg: OscPacket, delay_ms: u64) {
+    fn send_with_delay(&self, msg: OscPacket, delay_ms: u64) {
         // TODO: Trying out some latency adjustments to fix desync issues
         // This is not the optimal way - these operations are highly reliant on context
 
