@@ -10,7 +10,8 @@ def play(index, category, args):
         "test_sample_id", # External id for n_set reference
         "example", # Sample pack to use - a dir-name in "sample_packs"
         index, # Index in pack or category
-        category # Category - blank equals none
+        category, # Category - blank equals none
+        70 # Execution delay ms
     ] + args)
 
 step = 0.4

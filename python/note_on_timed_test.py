@@ -14,6 +14,7 @@ client.send_message("/note_on_timed", [
     "gentle", # SynthDef to use, See scd/synths/brute.scd
     "brute_TEST_HOLD", # Arbitrary unique external id for the ringing note
     "6.0", # Gate time ("note off after n sec")
+    0, # Delay execution by time
     "freq", # Named args continue from here
     355.0,
     "attT",
@@ -41,6 +42,7 @@ for _ in range(0,14):
         "brute",
         "brute_TEST" + str(i),
         "0.04",
+        0,
         "freq",
         arp[i] * 0.8,
         "attT",
@@ -58,6 +60,7 @@ for i in range(0, 53):
         "brute",
         "brute_TEST" + str(i),
         "0.04",
+        0,
         "freq",
         80.0 + (i * 22.0),
         "fx",

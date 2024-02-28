@@ -153,6 +153,7 @@ fn main() {
                 OscType::String("default".to_string()),
                 OscType::String("launch_ping".to_string()),
                 OscType::String("0.125".to_string()),
+                OscType::Int(0),
                 OscType::String("freq".to_string()),
                 OscType::Float(freq),
                 OscType::String("amp".to_string()),
@@ -164,7 +165,7 @@ fn main() {
 
     // Play a welcoming tune in a really obtuse way.
     for i in [130.81, 146.83, 196.00] {
-        SCProcessManager::send_timed_packets(sc_arc.clone(), beep(i, node_reg.clone()));
+        SCProcessManager::send_timed_packets(0, sc_arc.clone(), beep(i, node_reg.clone()));
         sleep(Duration::from_millis(125));
     }
 
@@ -176,6 +177,7 @@ fn main() {
         .on_message("/note_on_timed", &|msg| {
             let processed_message = NoteOnTimedMessage::new(&msg).unwrap();
             SCProcessManager::send_timed_packets(
+                processed_message.delay_ms,
                 sc_arc.clone(),
                 processed_message.as_osc(reg.clone()),
             );
@@ -183,16 +185,19 @@ fn main() {
         .on_message("/note_on", &|msg| {
             let processed_message = NoteOnMessage::new(&msg).unwrap();
             SCProcessManager::send_timed_packets(
+                processed_message.delay_ms,
                 sc_arc.clone(),
                 processed_message.as_osc(reg.clone()),
             );
         })
         .on_message("/play_sample", &|msg| {
             let processed_message = PlaySampleMessage::new(&msg).unwrap();
+            let delay = processed_message.delay_ms;
             let internal_msg = processed_message.with_buffer_arg(
                 sample_dict_arc.clone()
             );
             SCProcessManager::send_timed_packets(
+                delay,
                 sc_arc.clone(),
                 internal_msg.as_osc(reg.clone()),
             );
@@ -200,6 +205,7 @@ fn main() {
         .on_message("/note_modify", &|msg| {
             let processed_message = NoteModifyMessage::new(&msg).unwrap();
             SCProcessManager::send_timed_packets(
+                processed_message.delay_ms,
                 sc_arc.clone(),
                 processed_message.as_osc(reg.clone()),
             );

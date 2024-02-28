@@ -115,16 +115,21 @@ impl SCProcessManager {
         self.sclang_process.terminate().unwrap();
     }
 
-    pub fn send_timed_packets(handle: Arc<Mutex<SCProcessManager>>, msgs: Vec<TimedOSCPacket>) {
+    /*
+        Note on delay: supercollider execution time can vary by a few milliseconds.
+        By providing a delay, we remove this variation via specifying the exact time of execution.
+        This is important in precise sequencing but unimportant for direct human input.
+     */
+    pub fn send_timed_packets(delay_ms: u64, handle: Arc<Mutex<SCProcessManager>>, msgs: Vec<TimedOSCPacket>) {
 
         for msg in msgs {
             if msg.time == BigDecimal::zero() {
-                handle.lock().unwrap().send_with_delay(msg.packet, config::LATENCY_MS);
+                handle.lock().unwrap().send_with_delay(msg.packet, delay_ms);
             } else {
                 // Tell supercollider to execute the message after a delay
                 let time_in_ms = BigDecimal::from_str("1000.00").unwrap() * msg.time.clone();
                 let time_integer = time_in_ms.to_u64().unwrap();
-                handle.lock().unwrap().send_with_delay(msg.packet, config::LATENCY_MS + time_integer);
+                handle.lock().unwrap().send_with_delay(msg.packet, delay_ms + time_integer);
             }
         }
     }
@@ -134,27 +139,6 @@ impl SCProcessManager {
         // This is not the optimal way - these operations are highly reliant on context
 
         let now = SystemTime::now() + Duration::from_millis(delay_ms);
-
-        use std::convert::TryFrom;
-        let bundle = OscBundle {
-            timetag: OscTime::try_from(now).unwrap(),
-            content: vec![msg]
-        };
-
-        let packet = OscPacket::Bundle(bundle);
-
-        // NOTE: Used to just send &msg here
-        let msg_buf = encoder::encode(&packet).unwrap();
-
-        self.osc_socket.send_to(&msg_buf, self.scsynth_out_addr).unwrap();
-    }
-
-    pub fn send_to_server(&self, msg: OscPacket) {
-
-        // TODO: Trying out some latency adjustments to fix desync issues
-        // This is not the optimal way - these operations are highly reliant on context
-
-        let now = SystemTime::now() + Duration::from_millis(config::LATENCY_MS);
 
         use std::convert::TryFrom;
         let bundle = OscBundle {

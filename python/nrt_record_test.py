@@ -44,7 +44,7 @@ def make_note(time, args):
 
 def make_drum(time):
     # NOTE: Since we have no built-in sample packs, this will only work if you have an example pack in /home
-    args = ["nsam_id", "example", 0, "sn", "amp", 1.0, "ofs", 0.0]
+    args = ["nsam_id", "example", 0, "sn", 0, "amp", 1.0, "ofs", 0.0]
     note_msg = osc_message_builder.OscMessageBuilder(address="/play_sample")
     for arg in args:
         note_msg.add_arg(arg)
@@ -52,9 +52,9 @@ def make_drum(time):
     rows_bundle.add_content(timed_msg)
 
 # First args is reserved time, rather than placement on timeline
-make_note("1.0", ["0.1", "freq", 130.0])
-make_note("1.0", ["1.1", "freq", 160.0])
-make_note("0.0", ["0.5", "freq", 143.0])
+make_note("1.0", ["0.1", 0, "freq", 130.0])
+make_note("1.0", ["1.1", 0, "freq", 160.0])
+make_note("0.0", ["0.5", 0, "freq", 143.0])
 make_drum("0.25")
 make_drum("0.25")
 

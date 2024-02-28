@@ -23,13 +23,14 @@ for i in range(1, 2):
         "brute",
         "brute_TEST_HOLD_" + str(i),
         "0.4", # gate time
+        0,
         "freq",
         195.0 + (195.0 * (i)),
         "relT",
         0.2 + (i * 1.2)
     ])
 
-add_msg("/play_sample", ["example_id_lol", "example", 47, ""])
+add_msg("/play_sample", ["example_id_lol", "example", 47, "", 0])
 
 # Should work
 client.send(bundle.build())

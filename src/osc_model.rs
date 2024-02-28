@@ -3,6 +3,7 @@
     OSC structs for careful parsing and management of expected message and bundle types.
  */
 
+use std::convert::TryFrom;
 use std::option::Option;
 use std::str::FromStr;
 
@@ -48,6 +49,7 @@ pub struct NoteOnTimedMessage {
     pub synth_name: String, // The synth upon which to play the note.
     pub external_id: String, // Identifier for note to allow later modification.
     pub gate_time: BigDecimal, // TODO: Should be in pre-calculated ms rather than beats; this application has no BPM. Same for all time args, really. hard. 
+    pub delay_ms: u64,
     pub args: Vec<OscType> // Named args such as "bus" or "rel"
 }
 
@@ -57,14 +59,16 @@ impl NoteOnTimedMessage {
     pub fn new(msg: &OscMessage) -> Result<NoteOnTimedMessage, String> {
 
         msg.expect_addr("/note_on_timed")?;
-        msg.expect_args(3)?;
+        msg.expect_args(4)?;
 
         let synth_name = msg.get_string_at(0, "synth name")?;
         let external_id = msg.get_string_at(1, "external id")?;
         let gate_time_str = msg.get_string_at(2, "gate time")?;
+        let delay_ms = u64::try_from(msg.get_int_at(3, "delay_ms")?).unwrap();
         let gate_time = BigDecimal::from_str(&gate_time_str).unwrap();
 
-        let named_args = if msg.args.len() > 3 {(&msg.args[3..].to_vec()).clone()} else {vec![]};
+        // TODO: Named arg extraction can be combined with expect_args to avoid boilerplate
+        let named_args = if msg.args.len() > 4 {(&msg.args[4..].to_vec()).clone()} else {vec![]};
 
         validate_args(&named_args)?;
 
@@ -74,7 +78,8 @@ impl NoteOnTimedMessage {
             synth_name,
             external_id,
             gate_time,
-            args: named_args
+            delay_ms,
+            args: named_args,
         })
     }
 
@@ -85,22 +90,26 @@ impl NoteOnTimedMessage {
 pub struct NoteOnMessage {
     pub synth_name: String, // The synth upon which to play the note.
     pub external_id: String, // Identifier for note to allow later modification.
+    pub delay_ms: u64,
     pub args: Vec<OscType>, // Named args such as "bus" or "rel"
 }
 
 impl NoteOnMessage {
     pub fn new (msg: &OscMessage) -> Result<NoteOnMessage, String> {
-        msg.expect_args(2)?;
+        msg.expect_args(3)?;
 
         let synth_name = msg.get_string_at(0, "synth name")?;
         let external_id = msg.get_string_at(1, "external id")?;
+        let delay_ms = u64::try_from(msg.get_int_at(2, "delay_ms")?).unwrap();
 
-        let named_args = if msg.args.len() > 2 {(&msg.args[2..].to_vec()).clone()} else {vec![]};
+
+        let named_args = if msg.args.len() > 3 {(&msg.args[3..].to_vec()).clone()} else {vec![]};
         validate_args(&named_args)?;
 
         Ok(NoteOnMessage {
             synth_name,
             external_id,
+            delay_ms,
             args: named_args
         })
     }
@@ -111,6 +120,7 @@ impl NoteOnMessage {
 // NOTE: Note-off doesn't need its own message; it is simply an n_set with gate=0
 pub struct NoteModifyMessage {
     pub external_id_regex: String, // Modify all running external ids matching this regex
+    pub delay_ms: u64,
     pub args: Vec<OscType>, // Args to set (same as in SNewTimedGateMessage)
 }
 
@@ -120,11 +130,16 @@ impl NoteModifyMessage {
         message.expect_args(2)?;
 
         let external_id_regex = message.get_string_at(0, "external id regex")?;
-        let args = if message.args.len() > 1 {(&message.args[1..].to_vec()).clone()} else {vec![]};
+        let delay_ms = u64::try_from(message.get_int_at(1, "delay_ms")?).unwrap();
+
+
+
+        let args = if message.args.len() > 2 {(&message.args[2..].to_vec()).clone()} else {vec![]};
         validate_args(&args)?;
 
         Ok(NoteModifyMessage {
             external_id_regex,
+            delay_ms,
             args
         })
 
@@ -139,13 +154,14 @@ pub struct PlaySampleMessage {
     pub sample_pack: String, // The parent dir of the sample file
     pub index: usize, // Sample number - either as plain order in dir or in a given category
     pub category: Option<String>, // TODO: Arbitrary string codes... is there a better way?
+    pub delay_ms: u64,
     pub args: Vec<OscType>, // Args to set (same as in SNewTimedGateMessage)
 }
 
 impl PlaySampleMessage {
     pub fn new(message: &OscMessage) -> Result<PlaySampleMessage, String> {
 
-        message.expect_args(4)?;
+        message.expect_args(5)?;
 
         let external_id = message.get_string_at(0, "external_id")?;
         let sample_pack = message.get_string_at(1, "sample_pack")?;
@@ -156,8 +172,9 @@ impl PlaySampleMessage {
         }
 
         let cat_arg = message.get_string_at(3, "category")?;
+        let delay_ms = u64::try_from(message.get_int_at(4, "delay_ms")?).unwrap();
         let category = if cat_arg == "".to_string() {None} else {Some(cat_arg)};
-        let args = if message.args.len() > 4 {(&message.args[4..].to_vec()).clone()} else {vec![]};
+        let args = if message.args.len() > 5 {(&message.args[5..].to_vec()).clone()} else {vec![]};
         validate_args(&args)?;
 
         Ok(PlaySampleMessage {
@@ -165,6 +182,7 @@ impl PlaySampleMessage {
             sample_pack,
             index: index as usize,
             category,
+            delay_ms,
             args
         })
 
