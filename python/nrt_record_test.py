@@ -17,29 +17,46 @@ bundle.add_content(msg.build())
 msg2 = osc_message_builder.OscMessageBuilder(address="/nrt_record_info")
 msg2.add_arg(120.0)
 msg2.add_arg("myfile.wav")
-msg2.add_arg(4.0) # A smarter program would adjust this according to timed messages added (end beat)
+msg2.add_arg(6.0) # A smarter program would adjust this according to timed messages added (end beat)
 bundle.add_content(msg2.build())
 
 rows_bundle = osc_bundle_builder.OscBundleBuilder(osc_bundle_builder.IMMEDIATELY)
 
-def add_msg(time, addr, args):
-    args = ["brute", "gentle_nrt_id"] + args
+def create_timed_message(time, osc_msg):
     bun = osc_bundle_builder.OscBundleBuilder(osc_bundle_builder.IMMEDIATELY)
     top_msg = osc_message_builder.OscMessageBuilder(address="/bundle_info")
     top_msg.add_arg("timed_msg")
     info_msg = osc_message_builder.OscMessageBuilder(address="/timed_msg_info")
     info_msg.add_arg(time)
-    note_msg = osc_message_builder.OscMessageBuilder(address=addr)
-    for arg in args:
-        note_msg.add_arg(arg)
     bun.add_content(top_msg.build())
     bun.add_content(info_msg.build())
-    bun.add_content(note_msg.build())
-    rows_bundle.add_content(bun.build())
+    bun.add_content(osc_msg.build())
+    return bun.build()
 
-add_msg(0.0, "/note_on_timed", [0.1])
-add_msg(0.5, "/note_on_timed", [1.1])
-add_msg(2.0, "/note_on_timed", [0.05])
+def make_note(time, args):
+    args = ["brute", "gentle_nrt_id"] + args
+    note_msg = osc_message_builder.OscMessageBuilder(address="/note_on_timed")
+    for arg in args:
+        note_msg.add_arg(arg)
+
+    timed_msg = create_timed_message(time, note_msg)
+    rows_bundle.add_content(timed_msg)
+
+def make_drum(time):
+    # NOTE: Since we have no built-in sample packs, this will only work if you have an example pack in /home
+    args = ["nsam_id", "example", 0, "sn", "amp", 1.0, "ofs", 0.0]
+    note_msg = osc_message_builder.OscMessageBuilder(address="/play_sample")
+    for arg in args:
+        note_msg.add_arg(arg)
+    timed_msg = create_timed_message(time, note_msg)
+    rows_bundle.add_content(timed_msg)
+
+# First args is reserved time, rather than placement on timeline
+make_note("1.0", ["0.1", "freq", 130.0])
+make_note("1.0", ["1.1", "freq", 160.0])
+make_note("0.0", ["0.5", "freq", 143.0])
+make_drum("0.25")
+make_drum("0.25")
 
 # Should work
 bundle.add_content(rows_bundle.build())

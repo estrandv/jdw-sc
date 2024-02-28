@@ -1,7 +1,7 @@
 #![feature(result_flattening)]
 
-use std::cell::RefCell;
 use std::{f32, f64, ops};
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::sync::{Arc, Mutex};

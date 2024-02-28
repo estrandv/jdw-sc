@@ -4,6 +4,7 @@ from pythonosc import udp_client
 # Hardcoded default port of jdw-sc main application
 client = udp_client.SimpleUDPClient("127.0.0.1", 13331) # Straight to main application
 
+# NOTE: Since we have no built-in sample packs, this will only work if you have an example pack in /home
 def play(index, category, args):
     client.send_message("/play_sample", [
         "test_sample_id", # External id for n_set reference

@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use bigdecimal::BigDecimal;
 use jdw_osc_lib::model::TimedOSCPacket;
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use rosc::{OscBundle, OscMessage, OscPacket, OscType};
 
 use crate::{create_nrt_script, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage, SamplePackCollection, scd_templating, SuperColliderMessage};
@@ -34,46 +34,41 @@ struct NRTPacketConverter {
 }
 
 impl NRTPacketConverter {
-    fn process_msg(&self, msg: &OscMessage) -> Vec<TimedOSCPacket> {
-
-        let beat = self.current_beat.clone();
-        let registry = self.reg_handle.clone();
-
-        match msg.addr.as_str() {
-            "/note_on_timed" => {
-                NoteOnTimedMessage::new(&msg.clone())
-                    .unwrap()
-                    .as_nrt_osc(registry, beat)
-            }
-            "/play_sample" => {
-                PlaySampleMessage::new(msg)
-                    .unwrap()
-                    .with_buffer_arg(
-                        self.buffer_handle.clone()
-                    )
-                    .as_nrt_osc(registry, beat)
-            }
-            "/note_on" => {
-                NoteOnMessage::new(msg)
-                    .unwrap()
-                    .as_nrt_osc(registry, beat)
-            }
-            "/note_modify" => {
-                NoteModifyMessage::new(msg)
-                    .unwrap()
-                    .as_nrt_osc(registry, beat)
-            }
-            _ => {
-                error!("UNKNOWN NRT MSG");
-                vec![] // TODO: Wrap in some default handler - important part is using current_time
-            }
-        }
-    }
-
     fn process_packet(&self, timed_packet: &TimedOSCPacket) -> Vec<TimedOSCPacket> {
         return match &timed_packet.packet {
             OscPacket::Message(msg) => {
-                self.process_msg(msg)
+                let beat = self.current_beat.clone();
+                let registry = self.reg_handle.clone();
+
+                match msg.addr.as_str() {
+                    "/note_on_timed" => {
+                        NoteOnTimedMessage::new(&msg.clone())
+                            .unwrap()
+                            .as_nrt_osc(registry, beat)
+                    }
+                    "/play_sample" => {
+                        PlaySampleMessage::new(msg)
+                            .unwrap()
+                            .with_buffer_arg(
+                                self.buffer_handle.clone()
+                            )
+                            .as_nrt_osc(registry, beat)
+                    }
+                    "/note_on" => {
+                        NoteOnMessage::new(msg)
+                            .unwrap()
+                            .as_nrt_osc(registry, beat)
+                    }
+                    "/note_modify" => {
+                        NoteModifyMessage::new(msg)
+                            .unwrap()
+                            .as_nrt_osc(registry, beat)
+                    }
+                    other => {
+                        error!("UNKNOWN NRT MSG {}", other);
+                        vec![] // TODO: Wrap in some default handler - important part is using current_time
+                    }
+                }
             }
             OscPacket::Bundle(bun) => {
                 warn!("NRT support for timed bundles not yet implemented");
@@ -116,6 +111,8 @@ impl NRTRecordMessage {
             buffer_handle,
             current_beat: BigDecimal::from_str("0.0").unwrap(),
         };
+
+        info!("Processing messages with length: {}", self.messages.len());
 
         processor.process_packets(&self.messages)
     }
@@ -189,6 +186,7 @@ pub fn get_nrt_record_scd(msg: &NRTRecordMessage, buffer_handle: Arc<Mutex<Sampl
     let mut all_nrt_rows: Vec<String> = vec![];
     all_nrt_rows.extend(buffer_load_row_chunk);
     all_nrt_rows.extend(synth_rows);
+
     all_nrt_rows.extend(row_chunk);
 
     create_nrt_script(

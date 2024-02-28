@@ -8,6 +8,7 @@ use std::str::FromStr;
 
 use bigdecimal::BigDecimal;
 use jdw_osc_lib::model::{OscArgHandler, TaggedBundle, TimedOSCPacket};
+use log::{info, warn};
 use rosc::{OscMessage, OscPacket, OscType};
 
 // Verify that custom args follow the String,float,String,float... pattern
@@ -194,18 +195,26 @@ impl NRTRecordMessage {
         let info_msg = bundle.get_message(0)?;
         let message_bundle = bundle.get_bundle(1)?;
 
+        info!("Began parsing an nrt_record bundle with content size: {}", message_bundle.content.len());
+
         let timed_messages: Vec<_> = message_bundle.content.iter()
             .map(|packet| return match packet {
                 OscPacket::Bundle(bun) => {
                     let tagged = TaggedBundle::new(&bun)?;
+                    info!("Parsing tagged bundle for NRT! {}", tagged.bundle_tag);
                     Ok(TimedOSCPacket::from_bundle(tagged)?)
                 }
-                _ => { Err("Unexpected non-bundle when unpacking timed messages bundle".to_string()) }
+                _ => {
+                    warn!("Unexpected non-bundle when unpacking timed messages bundle content");
+                    Err("Unexpected non-bundle when unpacking timed messages bundle".to_string())
+                }
             })
             // TODO: Pref I guess we want to error check properly but cba right now
-            .filter(|m| m.is_ok())
+            //  - at least this gives a message on crash
             .map(|m| m.unwrap())
             .collect();
+
+        info!("Timed messages length: {}", timed_messages.len());
 
         info_msg.expect_addr("/nrt_record_info")?;
         let bpm = info_msg.get_float_at(0, "bpm")?;
