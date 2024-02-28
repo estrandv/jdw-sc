@@ -14,7 +14,7 @@ use std::option::Option;
 use std::sync::{Arc, Mutex};
 use jdw_osc_lib::model::{OscArgHandler, TaggedBundle, TimedOSCPacket};
 use log::{debug, info, warn};
-use crate::SampleDict;
+use crate::SamplePackCollection;
 
 
 // Verify that custom args follow the String,float,String,float... pattern

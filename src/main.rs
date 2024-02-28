@@ -15,9 +15,9 @@ use simple_logger::SimpleLogger;
 use subprocess::{Exec, Popen, PopenConfig, Redirection};
 
 use crate::config::APPLICATION_IN_PORT;
-use crate::internal_osc_conversion::{InternalOSCMorpher};
+use crate::internal_osc_conversion::{SuperColliderMessage};
 use crate::osc_model::{NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage};
-use crate::samples::SampleDict;
+use crate::samples::SamplePackCollection;
 use crate::scd_templating::create_nrt_script;
 use crate::supercollider::SCProcessManager;
 use crate::node_lookup::NodeIDRegistry;
@@ -30,6 +30,8 @@ mod nrt_record;
 mod config;
 mod internal_osc_conversion;
 mod node_lookup;
+mod util;
+mod sample_sorting;
 
 /*
     TODO: General refactoring of the whole main loop. 
@@ -102,12 +104,12 @@ fn main() {
     let mut sample_pack_dir = home_dir().unwrap();
     sample_pack_dir.push("sample_packs");
 
-    let sample_dict = SampleDict::from_dir(&sample_pack_dir).unwrap_or_else(|e| {
+    let sample_dict = SamplePackCollection::create(&sample_pack_dir).unwrap_or_else(|e| {
         error!("Unable to read buffer data: {} - no samples will be provided", e);
-        SampleDict::dummy()
+        SamplePackCollection::empty()
     });
 
-    let buffer_string = sample_dict.to_buffer_load_scd();
+    let buffer_string = sample_dict.as_buffer_load_scd();
 
     let sample_dict_arc = Arc::new(Mutex::new(sample_dict));
 

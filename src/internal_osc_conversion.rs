@@ -10,11 +10,11 @@ use log::{debug, info, warn};
 use regex::Regex;
 use rosc::{OscMessage, OscPacket, OscType};
 
-use crate::{NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, PlaySampleMessage, SampleDict};
+use crate::{NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, PlaySampleMessage, SamplePackCollection};
 use crate::node_lookup::NodeIDRegistry;
 
 
-pub trait InternalOSCMorpher {
+pub trait SuperColliderMessage {
     fn as_osc(&self, reg: Arc<Mutex<NodeIDRegistry>>) -> Vec<TimedOSCPacket>;
     fn as_nrt_osc(&self, reg: Arc<Mutex<NodeIDRegistry>>, start_time: BigDecimal) -> Vec<TimedOSCPacket> {
         self.as_osc(reg).iter()
@@ -50,7 +50,7 @@ fn create_s_new(
     TimedOSCPacket {time: BigDecimal::from_str("0.0").unwrap(), packet}
 }
 
-impl InternalOSCMorpher for NoteOnTimedMessage {
+impl SuperColliderMessage for NoteOnTimedMessage {
     fn as_osc(&self, reg: Arc<Mutex<NodeIDRegistry>>) -> Vec<TimedOSCPacket> {
 
         let node_id = reg.lock().unwrap().create_node_id(&self.external_id);
@@ -73,7 +73,7 @@ impl InternalOSCMorpher for NoteOnTimedMessage {
 
 }
 
-impl InternalOSCMorpher for NoteOnMessage {
+impl SuperColliderMessage for NoteOnMessage {
     fn as_osc(&self, reg: Arc<Mutex<NodeIDRegistry>>) -> Vec<TimedOSCPacket> {
         let node_id = reg.lock().unwrap().create_node_id(&self.external_id);
         let msg = create_s_new(node_id, &self.synth_name, &self.args);
@@ -83,7 +83,7 @@ impl InternalOSCMorpher for NoteOnMessage {
 
 }
 
-impl InternalOSCMorpher for NoteModifyMessage {
+impl SuperColliderMessage for NoteModifyMessage {
     fn as_osc(&self, reg: Arc<Mutex<NodeIDRegistry>>) -> Vec<TimedOSCPacket> {
         let node_ids = reg.lock().unwrap().regex_search_node_ids(&self.external_id_regex);
 
@@ -120,13 +120,13 @@ pub struct PreparedPlaySampleMessage {
 
 impl PlaySampleMessage {
 
-    pub fn with_buffer_arg(self, samples: Arc<Mutex<SampleDict>>) -> PreparedPlaySampleMessage {
+    pub fn with_buffer_arg(self, samples: Arc<Mutex<SamplePackCollection>>) -> PreparedPlaySampleMessage {
         let mut base_args = self.args.clone();
 
         let buf_nr = samples
             .lock()
             .unwrap()
-            .get_buffer_number(&self.sample_pack, self.index, self.category.clone())
+            .category_to_buf(&self.sample_pack, self.index, self.category.clone())
             .unwrap_or(0); // Should probably be some kind of error, but for now default to base buf
 
         if base_args.iter()
@@ -147,7 +147,7 @@ impl PlaySampleMessage {
 
 }
 
-impl InternalOSCMorpher for PreparedPlaySampleMessage {
+impl SuperColliderMessage for PreparedPlaySampleMessage {
     fn as_osc(&self, reg: Arc<Mutex<NodeIDRegistry>>) -> Vec<TimedOSCPacket> {
         let node_id = reg.lock().unwrap().create_node_id(&self.external_id);
         vec![create_s_new(

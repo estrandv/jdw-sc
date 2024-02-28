@@ -7,7 +7,7 @@ use log::{warn, debug};
 
 use rosc::{OscBundle, OscMessage, OscPacket, OscType};
 
-use crate::{create_nrt_script, InternalOSCMorpher, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage, SampleDict, scd_templating};
+use crate::{create_nrt_script, SuperColliderMessage, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage, SamplePackCollection, scd_templating};
 use crate::samples::Sample;
 use crate::node_lookup::NodeIDRegistry;
 
@@ -29,7 +29,7 @@ impl Sample {
 
 struct NRTPacketConverter {
     reg_handle: Arc<Mutex<NodeIDRegistry>>,
-    buffer_handle: Arc<Mutex<SampleDict>>,
+    buffer_handle: Arc<Mutex<SamplePackCollection>>,
     current_beat: BigDecimal,
 }
 
@@ -97,7 +97,7 @@ impl NRTRecordMessage {
 
     pub fn get_processed_messages(
         &self,
-        buffer_handle: Arc<Mutex<SampleDict>>,
+        buffer_handle: Arc<Mutex<SamplePackCollection>>,
     ) -> Vec<TimedOSCPacket> {
         let registry = NodeIDRegistry::new();
         let reg_handle = Arc::new(Mutex::new(registry));
@@ -160,7 +160,7 @@ impl NRTConvert for TimedOSCPacket {
     }
 }
 
-pub fn get_nrt_record_scd(msg: &NRTRecordMessage, buffer_handle: Arc<Mutex<SampleDict>>) -> Result<String, String> {
+pub fn get_nrt_record_scd(msg: &NRTRecordMessage, buffer_handle: Arc<Mutex<SamplePackCollection>>) -> Result<String, String> {
     let rows = msg.get_processed_messages(
         buffer_handle.clone()
     );
@@ -171,7 +171,7 @@ pub fn get_nrt_record_scd(msg: &NRTRecordMessage, buffer_handle: Arc<Mutex<Sampl
     let buffer_load_row_chunk = buffer_handle
         .lock()
         .unwrap()
-        .to_nrt_buffer_load_rows();
+        .as_nrt_buffer_load_rows();
 
     let synthdefs = scd_templating::read_all_synths("asBytes");
 

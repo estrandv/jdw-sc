@@ -8,6 +8,8 @@ use log::{debug, info, warn};
 use rosc::OscType;
 use crate::config::{SERVER_NAME, SERVER_OSC_SOCKET_NAME};
 use crate::PlaySampleMessage;
+use crate::util::Counter;
+use crate::sample_sorting::{SampleCategoryDict};
 
 #[derive(Debug, Clone)]
 pub struct Sample {
@@ -32,16 +34,16 @@ impl Sample {
 pub struct SamplePack {
     pub dir_path: PathBuf, // e.g. "wav/example"
     pub samples: Vec<Sample>,
-    pub samples_ordered: HashMap<String, Vec<Sample>> // samples by category
+    pub sample_dict: HashMap<String, Vec<Sample>> // samples by category
 }
 
 impl SamplePack {
 
-    pub fn get_file_name(&self) -> &str {
+    pub fn get_dir_path(&self) -> &str {
         self.dir_path.file_name().unwrap().to_str().unwrap()
     }
 
-    pub fn to_buffer_load_scd(&self) -> String {
+    pub fn as_buffer_load_scd(&self) -> String {
         let mut script = "".to_string();
         let dir = self.dir_path.to_str().unwrap();
         for sample in &self.samples {
@@ -51,7 +53,7 @@ impl SamplePack {
         script.to_string()
     }
 
-    pub fn to_nrt_buffer_load_rows(&self) -> Vec<String> {
+    pub fn as_nrt_buffer_load_rows(&self) -> Vec<String> {
         let dir = self.dir_path.to_str().unwrap();
 
         self.samples.iter()
@@ -59,18 +61,18 @@ impl SamplePack {
             .collect()
     }
 
-    pub fn get_buffer_number(&self, number: usize, category: Option<String>) -> i32 {
+    pub fn category_to_buf(&self, number: usize, category: Option<String>) -> i32 {
 
         if category.is_some() {
 
             let cat = category.clone().unwrap().to_string();
-            let sub_pack = self.samples_ordered.get(&cat);
+            let sub_pack = self.sample_dict.get(&cat);
 
             if sub_pack.is_some() {
 
                 let pack_max_index = sub_pack.unwrap().len();
 
-                let index = ( (number) % (pack_max_index) );
+                let index = number % pack_max_index;
 
                 let samples = sub_pack.unwrap().clone();
 
@@ -86,150 +88,19 @@ impl SamplePack {
 
         info!("Request did not provide any category key, playing sample as buffer index");
 
-        let index = (number % (self.samples.len()));
+        let index = number % self.samples.len();
         return self.samples.get(index).unwrap().buffer_nr;
     }
 }
 
-// NOTE: Should prob be moved to generic util.rs
-pub struct Counter {
-    value: i32
-}
-
-impl Counter {
-
-    pub fn next(&mut self) -> i32{
-        self.value += 1;
-        self.value
-    }
-}
-
-/*
-    Sorts samples in pack by category using very barebones keyword detection on filenames.
- */
-struct SampleSorter {
-    pub sample_map: HashMap<String, Vec<Sample>>
-}
-
-impl SampleSorter {
-    pub fn add(&mut self, sample: Sample) {
-
-        let key = get_sample_category(&sample.file_name);
-
-        let needs_vec = !self.sample_map.contains_key(&key);
-
-        if needs_vec {
-            self.sample_map.insert(key.to_string(), Vec::new());
-        }
-
-        self.sample_map.get_mut(&key).unwrap().push(sample);
-
-    }
-}
-
-// For categorizing based on name, e.g. "hihat_88" -> category:"hh"
-struct SampleCategory<'a> {
-    pub key: &'a str,
-    pub includes: Vec<&'a str>,
-    pub excludes: Vec<&'a str>,
-}
-
-impl SampleCategory<'_> {
-    pub fn accepts(&self, sample_name: &str) -> bool {
-        self.includes.iter().any(|incl| sample_name.to_lowercase().contains(&incl.to_lowercase()))
-            && !self.excludes.iter().any(|excl| sample_name.to_lowercase().contains(&excl.to_lowercase()))
-    }
-}
-
-// Assign to a predetermined "category" that we can then use to call samples by type
-fn get_sample_category(filename: &str) -> String {
-
-    // TODO: Static
-    let categories = vec![
-        SampleCategory {
-            key: "hh", includes: vec!["hat", "stick", "hh"],
-            excludes: vec![]
-        },
-        SampleCategory {
-            key: "bd", includes: vec!["bass", "drum", "kick", "bd"],
-            excludes: vec!["crash"]
-        },
-        SampleCategory {
-            key: "sh", includes: vec!["maraca", "shake", "tamb", "casta"],
-            excludes: vec![]
-        },
-        SampleCategory {
-            key: "to", includes: vec!["tom", "conga", "block", "bongo"],
-            excludes: vec![]
-        },
-        SampleCategory {
-            key: "sn", includes: vec!["snare", "clap", "sn", "sd"],
-            excludes: vec![]
-        },
-        SampleCategory {
-            key: "cy", includes: vec!["cymbal", "crash", "ride"],
-            excludes: vec![]
-        },
-        SampleCategory {
-            key: "be", includes: vec!["bell", "ring", "glass"],
-            excludes: vec![]
-        },
-    ];
-
-    let found = categories.iter().find(|cat| cat.accepts(filename));
-
-    match found {
-        Some(cat) => cat.key.to_string(),
-        None => "mi".to_string() // "misc"
-    }
-
-}
-
-pub struct SampleDict {
+pub struct SamplePackCollection {
     pub sample_packs: HashMap<String, SamplePack>,
     pub counter: Counter
 }
 
+impl SamplePackCollection {
 
-impl SampleDict {
-
-    pub fn dummy() -> SampleDict {
-        SampleDict {
-            sample_packs: HashMap::new(),
-            counter: Counter{value: 1}
-        }
-    }
-
-    pub fn get_buffer_number(&self, pack: &str, number: usize, category: Option<String>) -> Option<i32> {
-        let pack= self.sample_packs.get(pack);
-
-        match pack {
-            Some(sp) => {
-                Option::Some(sp.get_buffer_number(number, category))
-            },
-            None => {
-                return Option::None;
-            }
-        }
-
-    }
-
-    pub fn to_buffer_load_scd(&self) -> String {
-        let vec = self.sample_packs.values().clone().collect::<Vec<&SamplePack>>();
-        let vector = vec.iter().map(|pack| pack.to_buffer_load_scd()).collect::<Vec<String>>();
-        let result = vector.join("\n") + "\n" + SERVER_OSC_SOCKET_NAME + ".sendMsg(\"/buffers_loaded\", \"ok\");";
-        result
-    }
-
-    // NOTE: Belonging of all conversion methods is a bit unclear.
-    // For now they work here, but ideally samples should not care for neither nrt nor buffer scd strings
-    pub fn to_nrt_buffer_load_rows(&self) -> Vec<String> {
-        self.sample_packs.values()
-            .flat_map(|pack| pack.to_nrt_buffer_load_rows())
-            .collect()
-    }
-
-    pub fn from_dir(dir: &Path) -> Result<SampleDict, String> {
+    pub fn create(dir: &Path) -> Result<SamplePackCollection, String> {
 
         let mut counter = Counter {value: -1};
 
@@ -237,7 +108,7 @@ impl SampleDict {
 
         if !dir.exists() {
             warn!("Samples dir {:?} does not exist, skipping sample loading...", &dir);
-            return Ok(SampleDict {
+            return Ok(SamplePackCollection {
                 sample_packs: packs,
                 counter
             });
@@ -252,7 +123,7 @@ impl SampleDict {
 
                 // Each found subfolder is treated as a sample pack
                 let mut samples: Vec<Sample> = Vec::new();
-                let mut sample_sorter = SampleSorter {sample_map: HashMap::new()};
+                let mut sample_sorter = SampleCategoryDict {sample_map: HashMap::new()};
 
                 let read_subdir = match fs::read_dir(path.clone()) {
                     Ok(d) => {Ok(d)}
@@ -313,17 +184,53 @@ impl SampleDict {
                 packs.insert(pack_name, SamplePack{
                     dir_path: path,
                     samples,
-                    samples_ordered: sample_sorter.sample_map
+                    sample_dict: sample_sorter.sample_map
                 });
 
             }
         }
 
-        Ok(SampleDict {
+        Ok(SamplePackCollection {
             sample_packs: packs,
             counter
         })
-        
+
+    }
+
+    pub fn empty() -> SamplePackCollection {
+        SamplePackCollection {
+            sample_packs: HashMap::new(),
+            counter: Counter{value: 1}
+        }
+    }
+
+    pub fn category_to_buf(&self, pack: &str, number: usize, category: Option<String>) -> Option<i32> {
+        let pack= self.sample_packs.get(pack);
+
+        match pack {
+            Some(sp) => {
+                Some(sp.category_to_buf(number, category))
+            },
+            None => {
+                return None;
+            }
+        }
+
+    }
+
+    pub fn as_buffer_load_scd(&self) -> String {
+        let vec = self.sample_packs.values().clone().collect::<Vec<&SamplePack>>();
+        let vector = vec.iter().map(|pack| pack.as_buffer_load_scd()).collect::<Vec<String>>();
+        let result = vector.join("\n") + "\n" + SERVER_OSC_SOCKET_NAME + ".sendMsg(\"/buffers_loaded\", \"ok\");";
+        result
+    }
+
+    // NOTE: Belonging of all conversion methods is a bit unclear.
+    // For now, they work here, but ideally samples should not care for neither nrt nor buffer scd strings
+    pub fn as_nrt_buffer_load_rows(&self) -> Vec<String> {
+        self.sample_packs.values()
+            .flat_map(|pack| pack.as_nrt_buffer_load_rows())
+            .collect()
     }
 
 
