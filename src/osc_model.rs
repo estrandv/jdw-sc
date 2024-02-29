@@ -32,9 +32,9 @@ impl NoteOnTimedMessage {
 
         let synth_name = msg.get_string_at(0, "synth name")?;
         let external_id = msg.get_string_at(1, "external id")?;
-        let gate_time = msg.get_bigdecimal_at(2, "gate time").unwrap();
-        let delay_ms = msg.get_u64_at(3, "delay_ms").unwrap();
-        let named_args = msg.get_varargs(4).unwrap();
+        let gate_time = msg.get_bigdecimal_at(2, "gate time")?;
+        let delay_ms = msg.get_u64_at(3, "delay_ms")?;
+        let named_args = msg.get_varargs(4)?;
 
         Ok(NoteOnTimedMessage {
             synth_name,
@@ -63,8 +63,8 @@ impl NoteOnMessage {
 
         let synth_name = msg.get_string_at(0, "synth name")?;
         let external_id = msg.get_string_at(1, "external id")?;
-        let delay_ms = msg.get_u64_at(2, "delay_ms").unwrap();
-        let named_args = msg.get_varargs(3).unwrap();
+        let delay_ms = msg.get_u64_at(2, "delay_ms")?;
+        let named_args = msg.get_varargs(3)?;
 
         Ok(NoteOnMessage {
             synth_name,
@@ -91,8 +91,8 @@ impl NoteModifyMessage {
         message.expect_args(2)?;
 
         let external_id_regex = message.get_string_at(0, "external id regex")?;
-        let delay_ms = message.get_u64_at(1, "delay_ms").unwrap();
-        let args = message.get_varargs(2).unwrap();
+        let delay_ms = message.get_u64_at(1, "delay_ms")?;
+        let args = message.get_varargs(2)?;
 
         Ok(NoteModifyMessage {
             external_id_regex,
@@ -125,8 +125,8 @@ impl PlaySampleMessage {
         let sample_pack = message.get_string_at(1, "sample_pack")?;
         let index = message.get_int_at(2, "index")?;
         let cat_arg = message.get_string_at(3, "category")?;
-        let delay_ms = message.get_u64_at(4, "delay_ms").unwrap();
-        let args = message.get_varargs(5).unwrap();
+        let delay_ms = message.get_u64_at(4, "delay_ms")?;
+        let args = message.get_varargs(5)?;
 
         if index < 0 {
             return Err("Index arg in sample message incompatible: negative".to_string());
