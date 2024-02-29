@@ -12,37 +12,6 @@ use jdw_osc_lib::model::{OscArgHandler, TaggedBundle, TimedOSCPacket};
 use log::{info, warn};
 use rosc::{OscMessage, OscPacket, OscType};
 
-// Verify that custom args follow the String,float,String,float... pattern
-// Note: This could possibly be a bit expensive time-wise!
-fn validate_args(args: &Vec<OscType>) -> Result<(), String> {
-
-    let mut next_is_string = true;
-
-    for arg in args {
-        match arg {
-            OscType::Float(_) => {
-                if next_is_string {
-                    return Err("Malformed message: Custom arg float where string expected".to_string());
-                }
-
-                next_is_string = true;
-            },
-            OscType::String(_) => {
-                if !next_is_string {
-                    return Err("Malformed message: Custom arg string where float expected".to_string());
-                }
-
-                next_is_string = false;
-            },
-            _ => {
-                return Err("Malformed message: Custom arg in message not of type string or float".to_string());
-            }
-        }
-    }
-
-    Ok(())
-}
-
 // Initial structure below: (Note that we might want to expose other s_new args eventually)
 // ["/note_on_timed", "my_synth", "kb_my_synth_n33", 0.2, "arg1", 0.2, "arg2", 0.4, ...]
 pub struct NoteOnTimedMessage {
@@ -63,16 +32,9 @@ impl NoteOnTimedMessage {
 
         let synth_name = msg.get_string_at(0, "synth name")?;
         let external_id = msg.get_string_at(1, "external id")?;
-        let gate_time_str = msg.get_string_at(2, "gate time")?;
-        let delay_ms = u64::try_from(msg.get_int_at(3, "delay_ms")?).unwrap();
-        let gate_time = BigDecimal::from_str(&gate_time_str).unwrap();
-
-        // TODO: Named arg extraction can be combined with expect_args to avoid boilerplate
-        let named_args = if msg.args.len() > 4 {(&msg.args[4..].to_vec()).clone()} else {vec![]};
-
-        validate_args(&named_args)?;
-
-        // TODO: Ensure even number of named args and that they conform to str,double pattern
+        let gate_time = msg.get_bigdecimal_at(2, "gate time").unwrap();
+        let delay_ms = msg.get_u64_at(3, "delay_ms").unwrap();
+        let named_args = msg.get_varargs(4).unwrap();
 
         Ok(NoteOnTimedMessage {
             synth_name,
@@ -96,15 +58,13 @@ pub struct NoteOnMessage {
 
 impl NoteOnMessage {
     pub fn new (msg: &OscMessage) -> Result<NoteOnMessage, String> {
+        msg.expect_addr("/note_on")?;
         msg.expect_args(3)?;
 
         let synth_name = msg.get_string_at(0, "synth name")?;
         let external_id = msg.get_string_at(1, "external id")?;
-        let delay_ms = u64::try_from(msg.get_int_at(2, "delay_ms")?).unwrap();
-
-
-        let named_args = if msg.args.len() > 3 {(&msg.args[3..].to_vec()).clone()} else {vec![]};
-        validate_args(&named_args)?;
+        let delay_ms = msg.get_u64_at(2, "delay_ms").unwrap();
+        let named_args = msg.get_varargs(3).unwrap();
 
         Ok(NoteOnMessage {
             synth_name,
@@ -127,15 +87,12 @@ pub struct NoteModifyMessage {
 impl NoteModifyMessage {
     pub fn new(message: &OscMessage) -> Result<NoteModifyMessage, String> {
 
+        message.expect_addr("/note_modify")?;
         message.expect_args(2)?;
 
         let external_id_regex = message.get_string_at(0, "external id regex")?;
-        let delay_ms = u64::try_from(message.get_int_at(1, "delay_ms")?).unwrap();
-
-
-
-        let args = if message.args.len() > 2 {(&message.args[2..].to_vec()).clone()} else {vec![]};
-        validate_args(&args)?;
+        let delay_ms = message.get_u64_at(1, "delay_ms").unwrap();
+        let args = message.get_varargs(2).unwrap();
 
         Ok(NoteModifyMessage {
             external_id_regex,
@@ -161,21 +118,21 @@ pub struct PlaySampleMessage {
 impl PlaySampleMessage {
     pub fn new(message: &OscMessage) -> Result<PlaySampleMessage, String> {
 
+        message.expect_addr("/play_sample")?;
         message.expect_args(5)?;
 
         let external_id = message.get_string_at(0, "external_id")?;
         let sample_pack = message.get_string_at(1, "sample_pack")?;
         let index = message.get_int_at(2, "index")?;
+        let cat_arg = message.get_string_at(3, "category")?;
+        let delay_ms = message.get_u64_at(4, "delay_ms").unwrap();
+        let args = message.get_varargs(5).unwrap();
 
         if index < 0 {
             return Err("Index arg in sample message incompatible: negative".to_string());
         }
 
-        let cat_arg = message.get_string_at(3, "category")?;
-        let delay_ms = u64::try_from(message.get_int_at(4, "delay_ms")?).unwrap();
         let category = if cat_arg == "".to_string() {None} else {Some(cat_arg)};
-        let args = if message.args.len() > 5 {(&message.args[5..].to_vec()).clone()} else {vec![]};
-        validate_args(&args)?;
 
         Ok(PlaySampleMessage {
             external_id,
