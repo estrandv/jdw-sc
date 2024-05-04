@@ -164,7 +164,11 @@ impl NRTConvert for TimedOSCPacket {
     }
 }
 
-pub fn get_nrt_record_scd(msg: &NRTRecordMessage, buffer_handle: Arc<Mutex<SamplePackCollection>>) -> Result<String, String> {
+pub fn get_nrt_record_scd(
+    msg: &NRTRecordMessage,
+    buffer_handle: Arc<Mutex<SamplePackCollection>>,
+    synthdef_scds: Arc<Mutex<Vec<String>>>,
+) -> Result<String, String> {
     let rows = msg.get_processed_messages(
         buffer_handle.clone()
     );
@@ -177,7 +181,12 @@ pub fn get_nrt_record_scd(msg: &NRTRecordMessage, buffer_handle: Arc<Mutex<Sampl
         .unwrap()
         .as_nrt_buffer_load_rows();
 
-    let synthdefs = scd_templating::read_all_synths("asBytes");
+    let mut synthdefs: Vec<String> = synthdef_scds.lock().unwrap().iter().map(|def| def.clone() + ".asBytes").collect();
+    // TODO: Compat reading of the scd dir - should eventually be removed in favour of "synthdef_scds".
+    let filedefs = scd_templating::read_all_synths("asBytes");
+    for f in filedefs {
+        synthdefs.push(f.clone());
+    }
 
     let synth_rows: Vec<_> = synthdefs.iter()
         .map(|def| { return scd_templating::nrt_wrap_synthdef(def); })

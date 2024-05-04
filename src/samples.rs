@@ -45,6 +45,7 @@ impl SamplePack {
         self.dir_path.file_name().unwrap().to_str().unwrap()
     }
 
+    // TODO: Some scoping confusion here - impl functions like these in the appropriate places! 
     pub fn as_buffer_load_scd(&self) -> String {
         let mut script = "".to_string();
         let dir = self.dir_path.to_str().unwrap();

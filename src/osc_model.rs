@@ -17,7 +17,7 @@ use rosc::{OscMessage, OscPacket, OscType};
 pub struct NoteOnTimedMessage {
     pub synth_name: String, // The synth upon which to play the note.
     pub external_id: String, // Identifier for note to allow later modification.
-    pub gate_time: BigDecimal, // TODO: Should be in pre-calculated ms rather than beats; this application has no BPM. Same for all time args, really. hard. 
+    pub gate_time: BigDecimal,
     pub delay_ms: u64,
     pub args: Vec<OscType> // Named args such as "bus" or "rel"
 }
@@ -184,8 +184,6 @@ impl NRTRecordMessage {
                     Err("Unexpected non-bundle when unpacking timed messages bundle".to_string())
                 }
             })
-            // TODO: Pref I guess we want to error check properly but cba right now
-            //  - at least this gives a message on crash
             .map(|m| m.unwrap())
             .collect();
 

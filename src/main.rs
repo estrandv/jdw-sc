@@ -9,8 +9,9 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use home::home_dir;
-use jdw_osc_lib::model::{TaggedBundle, TimedOSCPacket};
+use jdw_osc_lib::model::{OscArgHandler, TaggedBundle, TimedOSCPacket};
 use jdw_osc_lib::osc_stack::OSCStack;
+use json::Array;
 use log::{debug, error, info, LevelFilter, warn};
 use rosc::{OscMessage, OscPacket, OscType};
 use simple_logger::SimpleLogger;
@@ -34,14 +35,43 @@ mod internal_osc_conversion;
 mod node_lookup;
 mod util;
 mod sample_sorting;
+mod state_structs;
+
 
 /*
-    TODO: General refactoring of the whole main loop. 
-    The Supercollider class is currently a hodge podge of different paradigms since it has evolved organically 
-        from little to medium rust knowledge on my part. 
-    Ideally, we want to separate state and logic better, like we have in jdw-sequencer. 
-    A poller should process incoming messages into neat vectors/buffers of "messages to send to sclang or scsynth"
-        and then use a minimal and transparent amount of locks to accomplish that. 
+    TODOs:
+    
+    - SET_BPM
+        - Should store a BPM for NRT as well as set it for the running server if that is possible (in order to auto-adjust args)
+        - Since this will be saved in state, it becomes less important that NRT_RECORD has a bpm parameter 
+        - Should also adjust GATE_TIME, since the current logic uses a time-stamp for the gate-off message 
+
+    - CREATE_SYNTH
+        - See dev_diary for explanation why it has to be synth specifically 
+        - Note existing code: 
+            - All synths code files are read and templated in the same call, which happens twice (startup and NRT)
+            - Much like for the sample dict, we should have a struct containing all loaded templates at all times
+            - This struct can then export arrays when needed and be supplied to NRT record
+            - Calls to /create_synth should immediately add the supplied template
+            - I SAY TEMPLATE BUT WE SHOULD DITCH THAT 
+                - :synth_name can be manually supplied and has little bearing when files are not the basis anymore 
+                - :operation is just the end-part of the file, arguably not part of the synthDef either, so we can just append 
+
+    - LOAD_SAMPLE
+        - Also has some background in dev_diary
+        - Basically, we can add one sample file at a time by supplying the right paramteters 
+            - sample_pack: Add to this pack, create it if not yet present 
+            - index: This is sample number <index> in the given pack 
+            - path (absolute): Read the sample file from here 
+            - category: Group sample in this category
+        - Note that existing structures (sample dict) should be able to acocmodate this without any radical changes 
+            -> Which also means it should work just fine with NRT 
+
+    - CREATE_EFFECT 
+        - Note the above! An effect is essentially just a synth that routes sound from one buffer to another 
+        - So this would go under CREATE_SYNTH but with a slightly different template supplied 
+        - The neat thing of course being that this handles NRT as well! 
+
 */
 
 fn main() {
@@ -117,6 +147,10 @@ fn main() {
     let buffer_string = sample_dict.as_buffer_load_scd();
 
     let sample_dict_arc = Arc::new(Mutex::new(sample_dict));
+
+    // Populated via osc messages, used e.g. for NRT recording
+    let loaded_synthdef_snippets: Vec<String> = Vec::new();
+    let synthdef_snippets_arc = Arc::new(Mutex::new(loaded_synthdef_snippets));
 
     if !buffer_string.is_empty() {
         sc_arc.lock().unwrap().send_to_client(
@@ -213,13 +247,27 @@ fn main() {
         .on_message("/read_scd", &|msg| {
             sc_arc.lock().unwrap().send_to_client(msg);
         })
+        .on_message("/create_synthdef", &|msg| {
+
+            // save scd in state, run scd in sclang
+            let definition = msg.get_string_at(0, "Synthdef scd string").unwrap();
+            synthdef_snippets_arc.lock().unwrap().push(definition.clone());
+            let add_call = definition + ".add;";
+            sc_arc.lock().unwrap().send_to_client(OscMessage {
+                addr: "/read_scd".to_string(),
+                args: vec![
+                    OscType::String(add_call),
+                ],
+            });
+
+        })
         .on_tbundle("nrt_record", &|tagged_bundle| {
             let nrt_record_msg = NRTRecordMessage::from_bundle(tagged_bundle);
 
             match nrt_record_msg {
                 Ok(nrt_record) => {
                     let nrt_result = nrt_record::get_nrt_record_scd(
-                        &nrt_record, sample_dict_arc.clone(),
+                        &nrt_record, sample_dict_arc.clone(), synthdef_snippets_arc.clone()
                     ).unwrap();
 
                     sc_arc.lock().unwrap().send_to_client(
