@@ -22,6 +22,7 @@ use crate::internal_osc_conversion::SuperColliderMessage;
 use crate::node_lookup::NodeIDRegistry;
 use crate::osc_model::{LoadSampleMessage, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage};
 use crate::samples::SamplePackCollection;
+use crate::sampling::SamplePackDict;
 use crate::scd_templating::create_nrt_script;
 use crate::supercollider::SCProcessManager;
 
@@ -132,10 +133,12 @@ fn main() {
         )
     }
 
-    /*
-        Prepare sample players. All samples are read into buffers via read_scd on the sclang client.
-        The sample dict struct keeps track of which buffer index belongs to which sample pack.
-     */
+    // TODO: Running two compat solutions atm - remove the dir-reading later
+
+    let sample_pack_dict = SamplePackDict::new();
+    let sample_pack_dict_arc = Arc::new(Mutex::new(sample_pack_dict));
+
+    ///
 
     let mut sample_pack_dir = home_dir().unwrap();
     sample_pack_dir.push("sample_packs");
@@ -148,10 +151,6 @@ fn main() {
     let buffer_string = sample_dict.as_buffer_load_scd();
 
     let sample_dict_arc = Arc::new(Mutex::new(sample_dict));
-
-    // Populated via osc messages, used e.g. for NRT recording
-    let loaded_synthdef_snippets: Vec<String> = Vec::new();
-    let synthdef_snippets_arc = Arc::new(Mutex::new(loaded_synthdef_snippets));
 
     if !buffer_string.is_empty() {
         sc_arc.lock().unwrap().send_to_client(
@@ -175,6 +174,12 @@ fn main() {
             Ok(()) => ()
         };
     }
+
+    ///
+
+    // Populated via osc messages, used e.g. for NRT recording
+    let loaded_synthdef_snippets: Vec<String> = Vec::new();
+    let synthdef_snippets_arc = Arc::new(Mutex::new(loaded_synthdef_snippets));
 
     ///////////////////////////
 
@@ -228,6 +233,9 @@ fn main() {
         .on_message("/play_sample", &|msg| {
             let processed_message = PlaySampleMessage::new(&msg).unwrap();
             let delay = processed_message.delay_ms;
+            // TODO: Instead find a sample and convert that to a play?
+            //  Tricky thing is of course that you need to combine args - maybe this is the best way?
+            // Nah, should just pass the buffer arg in - pointless to resolve everything in there
             let internal_msg = processed_message.with_buffer_arg(
                 sample_dict_arc.clone()
             );
@@ -250,7 +258,14 @@ fn main() {
         })
         .on_message("/load_sample", &|msg| {
             let resolved = LoadSampleMessage::new(&msg).unwrap();
-            // TODO: Modify NEW sample dict from sampling.rs
+            let sample = sample_pack_dict_arc.lock().unwrap().register_sample(resolved)
+                .unwrap();
+            sc_arc.lock().unwrap().send_to_client(OscMessage {
+                addr: "/read_scd".to_string(),
+                args: vec![
+                    OscType::String(sample.get_buffer_load_scd()),
+                ],
+            });
         })
         .on_message("/create_synthdef", &|msg| {
 

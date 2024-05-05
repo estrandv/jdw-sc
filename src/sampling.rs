@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use crate::config::SERVER_NAME;
 use crate::osc_model::LoadSampleMessage;
 
 #[derive(Debug, Clone)]
@@ -14,6 +15,28 @@ pub struct SamplePack {
 
 pub struct SamplePackDict {
     sample_packs: HashMap<String, SamplePack>
+}
+
+impl Sample {
+    pub fn get_buffer_load_scd(&self) -> String {
+        format!(
+            "Buffer.read({}, \"{}\", 0, -1, bufnum: {}); \n",
+            SERVER_NAME,
+            self.file_path.to_string(),
+            self.buffer_number
+        )
+    }
+
+    pub fn get_nrt_scd_row(&self, dir: &str) -> String {
+        let ret = format!(
+            "[0.0, (Buffer.new(server, 44100 * 8.0, 2, bufnum: {})).allocReadMsg(\"{}\")]",
+            self.buffer_number,
+            self.file_path.to_string(),
+        );
+
+        ret
+    }
+
 }
 
 impl SamplePack {
@@ -46,7 +69,7 @@ impl SamplePackDict {
         }
     }
 
-    pub fn register_sample(&mut self, msg: LoadSampleMessage) -> Result<(), String> {
+    pub fn register_sample(&mut self, msg: LoadSampleMessage) -> Result<Sample, String> {
 
         let present = self.sample_packs.contains_key(&msg.sample_pack);
 
@@ -58,14 +81,17 @@ impl SamplePackDict {
 
         let pack = self.sample_packs.get_mut(&msg.sample_pack).unwrap();
 
-        pack.samples.push(Sample {
+        let sample = Sample {
             file_path: msg.file_path.to_string(),
             buffer_number: msg.buffer_number,
             category_tag: msg.category_tag.to_string(),
-        });
+        };
+
+        pack.samples.push(sample.clone());
 
         // TODO: Some more error handling is probably a good idea, like for duplicate buffer numbers
-        Ok(())
+        // TODO: ref of sample might be enough of a return
+        Ok(sample)
     }
 
     pub fn find(
