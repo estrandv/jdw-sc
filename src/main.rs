@@ -1,15 +1,13 @@
 #![feature(result_flattening)]
 
-use std::{f32, f64, ops};
-use std::cell::RefCell;
-use std::path::{Path, PathBuf};
+use std::f32;
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::Duration;
-use bigdecimal::BigDecimal;
 
+use bigdecimal::BigDecimal;
 use home::home_dir;
 use jdw_osc_lib::model::{OscArgHandler, TaggedBundle, TimedOSCPacket};
 use jdw_osc_lib::osc_stack::OSCStack;
@@ -21,26 +19,21 @@ use simple_logger::SimpleLogger;
 use subprocess::{Exec, Popen, PopenConfig, Redirection};
 
 use crate::config::APPLICATION_IN_PORT;
+use crate::internal_osc_conversion::SuperColliderMessage;
 use crate::node_lookup::NodeIDRegistry;
+use crate::nrt_record::NRTConvert;
 use crate::osc_model::{LoadSampleMessage, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage};
-use crate::samples::SamplePackCollection;
 use crate::sampling::SamplePackDict;
 use crate::scd_templating::create_nrt_script;
 use crate::supercollider::SCProcessManager;
-use crate::internal_osc_conversion::SuperColliderMessage;
-use crate::nrt_record::NRTConvert;
 
 mod supercollider;
 mod scd_templating;
-mod samples;
 mod osc_model;
 mod nrt_record;
 mod config;
 mod internal_osc_conversion;
 mod node_lookup;
-mod util;
-mod sample_sorting;
-mod state_structs;
 mod sampling;
 
 
@@ -77,7 +70,8 @@ mod sampling;
         - Note the above! An effect is essentially just a synth that routes sound from one buffer to another 
         - So this would go under CREATE_SYNTH but with a slightly different template supplied 
         - The neat thing of course being that this handles NRT as well! 
-
+        - Remember: Effects are a bit special in terms of group id and placement in chain 
+        
 */
 
 fn main() {
@@ -121,72 +115,17 @@ fn main() {
 
     info!("Server online!");
 
-    /*
-        Use the synth definitions from the synths dir to ready custom scd messages.
-        The messages then create these synthdefs on the server using the sclang client.
-     */
-    let synth_defs = scd_templating::read_all_synths("add;");
-
-    // See start_server.scd.template for the /read_scd definition
-    for synth_def in synth_defs {
-        sc_arc.lock().unwrap().send_to_client(
-            OscMessage {
-                addr: "/read_scd".to_string(),
-                args: vec![OscType::String(synth_def)],
-            }
-        )
-    }
-
-    // TODO: Running two compat solutions atm - remove the dir-reading later
+    // TODO: Sampler synth must be created on startup - could potentially be part of boot script!
 
     let sample_pack_dict = SamplePackDict::new();
     let sample_pack_dict_arc = Arc::new(Mutex::new(sample_pack_dict));
 
-    ///
-
     let mut sample_pack_dir = home_dir().unwrap();
     sample_pack_dir.push("sample_packs");
-
-    let sample_dict = SamplePackCollection::create(&sample_pack_dir).unwrap_or_else(|e| {
-        error!("Unable to read buffer data: {} - no samples will be provided", e);
-        SamplePackCollection::empty()
-    });
-
-    let buffer_string = sample_dict.as_buffer_load_scd();
-
-    let sample_dict_arc = Arc::new(Mutex::new(sample_dict));
-
-    if !buffer_string.is_empty() {
-        sc_arc.lock().unwrap().send_to_client(
-            OscMessage {
-                addr: "/read_scd".to_string(),
-                args: vec![OscType::String(buffer_string)],
-            }
-        );
-
-        // Message is added to the end of the buffer load scd to signify a completed load call.
-        match sc_arc.lock().unwrap()
-            .await_response(
-                "/buffers_loaded",
-                vec![OscType::String("ok".to_string())],
-                Duration::from_secs(10),
-            ) {
-            Err(e) => {
-                error!("{}", e);
-                sc_arc.lock().unwrap().terminate();
-            }
-            Ok(()) => ()
-        };
-    }
-
-    ///
 
     // Populated via osc messages, used e.g. for NRT recording
     let loaded_synthdef_snippets: Vec<String> = Vec::new();
     let synthdef_snippets_arc = Arc::new(Mutex::new(loaded_synthdef_snippets));
-
-    ///////////////////////////
-
 
     let node_reg = Arc::new(Mutex::new(NodeIDRegistry::new()));
 
@@ -293,49 +232,16 @@ fn main() {
         })
         .on_tbundle("nrt_record", &|tagged_bundle| {
 
-            // TODO: Samples still need converting to new method
-            //  Below outlines a start of getting all rows
-            //  The remaining problem is that NRTPacketConverter is used for sample buffer args
-            //  And its a load of shite (see: get_processed_messages for the nrt message)
 
-            /*
-                HOW NRT MESSAGES ARE PROCESSED
-                - Use a timeline that starts at zero and increases with each message
-                - Each message is a packet and must be parsed separately before being turned into nrt osc
-                    - This is where the buffer_handle gets used by samples - others just convert
-                - End result is a Vec<TimedOSCPacket> of all the packets along the increasing timeline
-                    - These can then do "as_nrt_row" to become equivalent to the load rows
-
-                QUICK SKETCH:
-
-                    timeline = "0.0"
-                    for each timed_osc_packet in record_msg.messages:
-                        # Trait SuperColliderMessage exists, but requires buffer arg in the case of PreparedSample
-                        # Still, passing the new buffer registry along is perhaps the better method
-                        # So we resolve Vec<SuperColliderMessage> first, through some simple resolver function
-                        # Then we do the to_nrt_osc conversion separately with beat and registry and all that
-
-
-                UPDATE: STATUS
-                - implemented as listed
-                - everything should now work well enough that we can update nrt_record.py with some custom
-                    synths and sample packs and go to town
-                - TODO: Super important that we start cleaning up dead code once this works
-
-
-             */
+            // TODO: Now implemented with custom load methods - clean all dead code before making the below more readable! 
 
             let sample_rows: Vec<String> = sample_pack_dict_arc.lock().unwrap()
                 .get_all_samples().iter().map(|sample| sample.get_nrt_scd_row())
                 .collect();
 
-            let mut synthdefs: Vec<String> = synthdef_snippets_arc.lock().unwrap().iter().map(|def| def.clone() + ".asBytes").collect();
-            // TODO: Compat reading of the scd dir - should eventually be removed in favour of "synthdef_scds".
-            let filedefs = scd_templating::read_all_synths("asBytes");
-            for f in filedefs {
-                synthdefs.push(f.clone());
-            }
+            let synthdefs: Vec<String> = synthdef_snippets_arc.lock().unwrap().iter().map(|def| def.clone() + ".asBytes").collect();
 
+            // TODO: Compat reading of the scd dir - should eventually be removed in favour of "synthdef_scds".
             let mut scd_rows: Vec<_> = synthdefs.iter()
                 .map(|def| { return scd_templating::nrt_wrap_synthdef(def); })
                 .collect();

@@ -18,7 +18,6 @@ use subprocess::{Popen, PopenConfig, Redirection};
 
 use crate::{config, scd_templating};
 use crate::config::{SC_SERVER_INCOMING_READ_TIMEOUT, SCLANG_IN_PORT, SERVER_IN_PORT, SERVER_OUT_PORT};
-use crate::samples::SamplePackCollection;
 
 fn get_arg(args: Vec<OscType>, arg_name: &str) -> Option<OscType> {
         let pos = args.iter().position(|arg| arg.clone() == OscType::String(arg_name.to_string()));

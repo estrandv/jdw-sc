@@ -1,9 +1,5 @@
-use std::{fs, io};
-use std::fmt::format;
-use std::fs::DirEntry;
+use std::fs;
 use std::path::Path;
-
-use log::{debug, info};
 
 use crate::config::{APPLICATION_IP, SERVER_IN_PORT, SERVER_NAME, SERVER_OSC_SOCKET_NAME, SERVER_OUT_PORT, SUPERCOLLIDER_MEMORY_BYTES};
 
@@ -42,34 +38,6 @@ pub fn create_boot_script() -> Result<String, String> {
     text = text.replace("{:memory_bytes}", &SUPERCOLLIDER_MEMORY_BYTES.to_string());
 
     return Ok(text);
-}
-
-// TODO: Return result, clarify operation naming
-pub fn read_all_synths(operation: &str) -> Vec<String> {
-    let path = Path::new("src/scd/synths");
-
-    let mut result: Vec<String> = Vec::new();
-
-    for entry in fs::read_dir(path).unwrap() {
-        let path = entry.unwrap().path();
-        let raw_text = fs::read_to_string(path.clone()).unwrap();
-
-        let synth_name = path.file_stem().unwrap().to_str().unwrap().to_string();
-
-
-        let mut text = raw_text.replace("{:operation}", operation);
-        text = text.replace("{:synth_name}", &synth_name);
-
-        let file_name = path.file_name().unwrap().to_str().unwrap().to_string();
-
-        debug!("Reading: {}", file_name.clone());
-
-        result.push(text);
-
-    }
-
-    result
-
 }
 
 // Take synthdef code and wrap it in an nrt score line

@@ -22,8 +22,6 @@ a.recordNRT(
     sampleFormat: "int16",
     options: server.options,
     duration: {:end_time},
-    // TODO: If it turns out we can call o here, o should be templated in
-    // Update: Works!
     action: { {:out_socket_name}.sendMsg("/nrt_done", "ok"); }
 );
 

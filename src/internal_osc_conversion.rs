@@ -10,7 +10,7 @@ use log::{debug, error, info, warn};
 use regex::Regex;
 use rosc::{OscMessage, OscPacket, OscType};
 
-use crate::{NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, PlaySampleMessage, SamplePackCollection};
+use crate::{NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, PlaySampleMessage};
 use crate::node_lookup::NodeIDRegistry;
 use crate::sampling::SamplePackDict;
 
@@ -132,32 +132,6 @@ impl PlaySampleMessage {
 
         base_args.push(OscType::String("buf".to_string()));
         base_args.push(OscType::Int(buffer_number));
-
-        PreparedPlaySampleMessage {
-            external_id: self.external_id,
-            args: base_args
-        }
-    }
-
-    // TODO: Legacy
-    pub fn with_buffer_arg(self, samples: Arc<Mutex<SamplePackCollection>>) -> PreparedPlaySampleMessage {
-        let mut base_args = self.args.clone();
-
-        let buf_nr = samples
-            .lock()
-            .unwrap()
-            .category_to_buf(&self.sample_pack, self.index, self.category.clone())
-            .unwrap_or(0); // Should probably be some kind of error, but for now default to base buf
-
-        if base_args.iter()
-            .map(|arg| arg.clone())
-            .find(|arg| arg.clone().string().is_some_and(|a| a == "buf"))
-            .is_some() {
-            warn!("Sample play request contained a preset arg for 'buf', which can impact sample playback.");
-        }
-
-        base_args.push(OscType::String("buf".to_string()));
-        base_args.push(OscType::Int(buf_nr));
 
         PreparedPlaySampleMessage {
             external_id: self.external_id,
