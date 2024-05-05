@@ -9,9 +9,13 @@ import time
 client = udp_client.SimpleUDPClient("127.0.0.1", 13331) # Straight to main application
 client.send_message("/test", [1, "A string", 1337.0, "/try_this", "whoah"])
 
+# Create a synthdef to use 
+with open("synths/example.scd", "r") as synthdef:
+    client.send_message("/create_synthdef", synthdef.read())
+
 # This creates a ringing first tone
 client.send_message("/note_on_timed", [
-    "gentle", # SynthDef to use, See scd/synths/brute.scd
+    "example", # SynthDef to use, see load call above
     "brute_TEST_HOLD", # Arbitrary unique external id for the ringing note
     "6.0", # Gate time ("note off after n sec")
     0, # Delay execution by time
@@ -39,7 +43,7 @@ for _ in range(0,14):
         i = 0
 
     client.send_message("/note_on_timed", [
-        "brute",
+        "example",
         "brute_TEST" + str(i),
         "0.04",
         0,
@@ -57,7 +61,7 @@ for _ in range(0,14):
 
 for i in range(0, 53):
     client.send_message("/note_on_timed", [
-        "brute",
+        "example",
         "brute_TEST" + str(i),
         "0.04",
         0,

@@ -1,18 +1,19 @@
 import time
 from pythonosc import udp_client
+import os
 
-
-# TODO: Test likely dated since sample packs are no longer automatically loaded on startup
-# See: load_sample.py
+wav_file = os.path.dirname(os.path.realpath(__file__)) + "/wav/snare.wav"
 
 # Hardcoded default port of jdw-sc main application
 client = udp_client.SimpleUDPClient("127.0.0.1", 13331) # Straight to main application
 
-# NOTE: Since we have no built-in sample packs, this will only work if you have an example pack in /home
+# Ensure at least one sample exists
+client.send_message("/load_sample", [wav_file, "testsamples", 100, "bd"])
+
 def play(index, category, args):
     client.send_message("/play_sample", [
         "test_sample_id", # External id for n_set reference
-        "example", # Sample pack to use - a dir-name in "sample_packs"
+        "testsamples", # Sample pack to use - see load call above!
         index, # Index in pack or category
         category, # Category - blank equals none
         70 # Execution delay ms

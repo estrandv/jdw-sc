@@ -6,9 +6,15 @@ from pythonosc import udp_client
 # Hardcoded default port of jdw-sc main application
 client = udp_client.SimpleUDPClient("127.0.0.1", 13331) # Straight to main application
 
+
+# Create a synthdef to use 
+with open("synths/example.scd", "r") as synthdef:
+    client.send_message("/create_synthdef", synthdef.read())
+
+
 # See better explanation of note on parameters in note_on_timed_test.py
 client.send_message("/note_on", [
-    "gentle",
+    "example",
     "brute_MODTEST_1",
     0,
     "freq",
@@ -26,7 +32,7 @@ client.send_message("/note_on", [
 time.sleep(0.5)
 
 client.send_message("/note_on", [
-    "brute",
+    "example",
     "brute_MODTEST_2",
     0,
     "freq",

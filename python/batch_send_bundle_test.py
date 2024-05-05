@@ -8,6 +8,15 @@ import time
 # Hardcoded default port of jdw-sc main application
 client = udp_client.SimpleUDPClient("127.0.0.1", 13331) # Straight to main application
 
+# Create a synthdef to use 
+with open("synths/example.scd", "r") as synthdef:
+    client.send_message("/create_synthdef", synthdef.read())
+
+# Load a sample 
+import os
+wav_file = os.path.dirname(os.path.realpath(__file__)) + "/wav/snare.wav"
+client.send_message("/load_sample", [wav_file, "testsamples", 100, "bd"])
+
 bundle = osc_bundle_builder.OscBundleBuilder(osc_bundle_builder.IMMEDIATELY)
 
 def add_msg(addr, args):
@@ -20,7 +29,7 @@ add_msg("/bundle_info", ["batch-send"])
 
 for i in range(1, 2):
     add_msg("/note_on_timed", [
-        "brute",
+        "example",
         "brute_TEST_HOLD_" + str(i),
         "0.4", # gate time
         0,
@@ -30,7 +39,7 @@ for i in range(1, 2):
         0.2 + (i * 1.2)
     ])
 
-add_msg("/play_sample", ["example_id_lol", "example", 47, "", 0])
+add_msg("/play_sample", ["example_id_lol", "testsamples", 47, "", 0, "ofs", 0.0])
 
 # Should work
 client.send(bundle.build())

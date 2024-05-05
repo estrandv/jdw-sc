@@ -20,9 +20,12 @@ msg2.add_arg("myfile.wav")
 msg2.add_arg(6.0) # A smarter program would adjust this according to timed messages added (end beat)
 bundle.add_content(msg2.build())
 
-# Ensure a pack is present
-client.send_message("/load_sample", ["/home/estrandv/sample_packs/GBA/GBA-SP Perc3.wav", "example", 100, "bd"])
-# TODO: We should make a simple synth as well - figure out what the least possible config is and inline it here
+# Ensure a synth and sample pack 
+import os
+wav_file = os.path.dirname(os.path.realpath(__file__)) + "/wav/snare.wav"
+client.send_message("/load_sample", [wav_file, "example", 100, "bd"])
+with open("synths/example.scd", "r") as synthdef:
+    client.send_message("/create_synthdef", synthdef.read())
 
 rows_bundle = osc_bundle_builder.OscBundleBuilder(osc_bundle_builder.IMMEDIATELY)
 
@@ -38,7 +41,7 @@ def create_timed_message(time, osc_msg):
     return bun.build()
 
 def make_note(time, args):
-    args = ["brute", "gentle_nrt_id"] + args
+    args = ["example", "gentle_nrt_id"] + args
     note_msg = osc_message_builder.OscMessageBuilder(address="/note_on_timed")
     for arg in args:
         note_msg.add_arg(arg)
