@@ -20,7 +20,7 @@ use subprocess::{Exec, Popen, PopenConfig, Redirection};
 use crate::config::APPLICATION_IN_PORT;
 use crate::internal_osc_conversion::SuperColliderMessage;
 use crate::node_lookup::NodeIDRegistry;
-use crate::osc_model::{NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage};
+use crate::osc_model::{LoadSampleMessage, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage};
 use crate::samples::SamplePackCollection;
 use crate::scd_templating::create_nrt_script;
 use crate::supercollider::SCProcessManager;
@@ -36,6 +36,7 @@ mod node_lookup;
 mod util;
 mod sample_sorting;
 mod state_structs;
+mod sampling;
 
 
 /*
@@ -246,6 +247,10 @@ fn main() {
         })
         .on_message("/read_scd", &|msg| {
             sc_arc.lock().unwrap().send_to_client(msg);
+        })
+        .on_message("/load_sample", &|msg| {
+            let resolved = LoadSampleMessage::new(&msg).unwrap();
+            // TODO: Modify NEW sample dict from sampling.rs
         })
         .on_message("/create_synthdef", &|msg| {
 

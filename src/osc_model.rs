@@ -47,6 +47,46 @@ impl NoteOnTimedMessage {
 
 }
 
+pub struct LoadSampleMessage {
+    pub file_path: String,
+    pub sample_pack: String,
+    pub buffer_number: i32,
+    pub category_tag: String,
+}
+
+/*
+    TODO: Be the new standard for buffer loading
+    - remake the sample dict - it is too complex right now
+    - buffer_number is a unique id across everything
+    - when resolving "Nth sample in pack", it is done via index in the pack's list of samples
+        - Same order for category
+    - So a typical question asked is "what is the buffer number of the third sample in this named pack?"
+        - map<str, pack>[key].get(index) / .getWithTag("tag", index)
+    - We need:
+        - Same dict and packs, but with live-modification and empty constructors
+        - handling of the below message to create entries (No osc conversion needed for this message itself)
+
+    UPDATE:
+    - Existing sample pack structure isn't really built for handling custom paths per sample
+        ... and other things
+        ... so best if we make a whole new structure and just steal the conversion parts
+
+ */
+impl LoadSampleMessage {
+    pub fn new(msg: &OscMessage) -> Result<LoadSampleMessage, String> {
+        msg.expect_addr("/load_sample")?;
+        msg.expect_args(4)?;
+
+        Ok(LoadSampleMessage {
+            file_path: msg.get_string_at(0, "file_path")?,
+            sample_pack: msg.get_string_at(1, "sample_pack")?,
+            buffer_number: msg.get_int_at(2, "buffer_number")?,
+            category_tag: msg.get_string_at(3, "category_tag")?,
+        })
+
+    }
+}
+
 // ProscNoteCreateMessage
 // Non-timed regular s_new with external_id for later modifications
 pub struct NoteOnMessage {
