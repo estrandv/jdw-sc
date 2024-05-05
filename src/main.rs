@@ -4,27 +4,31 @@ use std::{f32, f64, ops};
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::process::exit;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::Duration;
+use bigdecimal::BigDecimal;
 
 use home::home_dir;
 use jdw_osc_lib::model::{OscArgHandler, TaggedBundle, TimedOSCPacket};
 use jdw_osc_lib::osc_stack::OSCStack;
 use json::Array;
 use log::{debug, error, info, LevelFilter, warn};
+use regex::Replacer;
 use rosc::{OscMessage, OscPacket, OscType};
 use simple_logger::SimpleLogger;
 use subprocess::{Exec, Popen, PopenConfig, Redirection};
 
 use crate::config::APPLICATION_IN_PORT;
-use crate::internal_osc_conversion::SuperColliderMessage;
 use crate::node_lookup::NodeIDRegistry;
 use crate::osc_model::{LoadSampleMessage, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage};
 use crate::samples::SamplePackCollection;
 use crate::sampling::SamplePackDict;
 use crate::scd_templating::create_nrt_script;
 use crate::supercollider::SCProcessManager;
+use crate::internal_osc_conversion::SuperColliderMessage;
+use crate::nrt_record::NRTConvert;
 
 mod supercollider;
 mod scd_templating;
@@ -111,7 +115,7 @@ fn main() {
         Err(e) => {
             error!("{}", e);
             sc_arc.lock().unwrap().terminate();
-        },
+        }
         Ok(()) => ()
     };
 
@@ -170,7 +174,7 @@ fn main() {
             Err(e) => {
                 error!("{}", e);
                 sc_arc.lock().unwrap().terminate();
-            },
+            }
             Ok(()) => ()
         };
     }
@@ -198,7 +202,6 @@ fn main() {
                 OscType::Float(freq),
                 OscType::String("amp".to_string()),
                 OscType::Float(1.0),
-
             ],
         }).unwrap().as_osc(node_reg)
     }
@@ -231,13 +234,21 @@ fn main() {
             );
         })
         .on_message("/play_sample", &|msg| {
+
+            // TODO: Now only uses new method
+
             let processed_message = PlaySampleMessage::new(&msg).unwrap();
             let delay = processed_message.delay_ms;
-            // TODO: Instead find a sample and convert that to a play?
-            //  Tricky thing is of course that you need to combine args - maybe this is the best way?
-            // Nah, should just pass the buffer arg in - pointless to resolve everything in there
-            let internal_msg = processed_message.with_buffer_arg(
-                sample_dict_arc.clone()
+            let category = processed_message.category.clone().unwrap_or("".to_string());
+            let buffer_number = sample_pack_dict_arc.lock().unwrap().find(
+                &processed_message.sample_pack,
+                processed_message.index,
+                &category,
+            ).map(|sample| sample.buffer_number).unwrap_or(0);
+            // TODO: Error handle missing sample
+
+            let internal_msg = processed_message.prepare(
+                buffer_number
             );
             SCProcessManager::send_timed_packets(
                 delay,
@@ -279,29 +290,100 @@ fn main() {
                     OscType::String(add_call),
                 ],
             });
-
         })
         .on_tbundle("nrt_record", &|tagged_bundle| {
-            let nrt_record_msg = NRTRecordMessage::from_bundle(tagged_bundle);
 
-            match nrt_record_msg {
-                Ok(nrt_record) => {
-                    let nrt_result = nrt_record::get_nrt_record_scd(
-                        &nrt_record, sample_dict_arc.clone(), synthdef_snippets_arc.clone()
-                    ).unwrap();
+            // TODO: Samples still need converting to new method
+            //  Below outlines a start of getting all rows
+            //  The remaining problem is that NRTPacketConverter is used for sample buffer args
+            //  And its a load of shite (see: get_processed_messages for the nrt message)
 
-                    sc_arc.lock().unwrap().send_to_client(
-                        OscMessage {
-                            addr: "/read_scd".to_string(),
-                            args: vec![OscType::String(nrt_result)],
-                        }
-                    );
+            /*
+                HOW NRT MESSAGES ARE PROCESSED
+                - Use a timeline that starts at zero and increases with each message
+                - Each message is a packet and must be parsed separately before being turned into nrt osc
+                    - This is where the buffer_handle gets used by samples - others just convert
+                - End result is a Vec<TimedOSCPacket> of all the packets along the increasing timeline
+                    - These can then do "as_nrt_row" to become equivalent to the load rows
 
-                    // TODO: Do something with the /nrt_done message
-                }
-                Err(e) => { warn!("{}", e) }
+                QUICK SKETCH:
+
+                    timeline = "0.0"
+                    for each timed_osc_packet in record_msg.messages:
+                        # Trait SuperColliderMessage exists, but requires buffer arg in the case of PreparedSample
+                        # Still, passing the new buffer registry along is perhaps the better method
+                        # So we resolve Vec<SuperColliderMessage> first, through some simple resolver function
+                        # Then we do the to_nrt_osc conversion separately with beat and registry and all that
+
+
+                UPDATE: STATUS
+                - implemented as listed
+                - everything should now work well enough that we can update nrt_record.py with some custom
+                    synths and sample packs and go to town
+                - TODO: Super important that we start cleaning up dead code once this works
+
+
+             */
+
+            let sample_rows: Vec<String> = sample_pack_dict_arc.lock().unwrap()
+                .get_all_samples().iter().map(|sample| sample.get_nrt_scd_row())
+                .collect();
+
+            let mut synthdefs: Vec<String> = synthdef_snippets_arc.lock().unwrap().iter().map(|def| def.clone() + ".asBytes").collect();
+            // TODO: Compat reading of the scd dir - should eventually be removed in favour of "synthdef_scds".
+            let filedefs = scd_templating::read_all_synths("asBytes");
+            for f in filedefs {
+                synthdefs.push(f.clone());
             }
+
+            let mut scd_rows: Vec<_> = synthdefs.iter()
+                .map(|def| { return scd_templating::nrt_wrap_synthdef(def); })
+                .collect();
+
+            for s in sample_rows {
+                scd_rows.push(s);
+            }
+
+            // TODO: Implementing the message rows as above - skipping error handling of from_bundle...
+
+            let nrt_record_msg = NRTRecordMessage::from_bundle(tagged_bundle).unwrap();
+
+            let registry = NodeIDRegistry::new();
+            let reg_handle = Arc::new(Mutex::new(registry));
+
+            let mut current_beat = BigDecimal::from_str("0.0").unwrap();
+
+            let message_rows: Vec<String> = nrt_record_msg.messages.iter()
+                .flat_map(|timed_packet| {
+                    let osc = internal_osc_conversion::resolve_msg(timed_packet.packet.clone(), sample_pack_dict_arc.clone())
+                        .as_nrt_osc(reg_handle.clone(), current_beat.clone());
+                    current_beat += timed_packet.time.clone();
+                    osc
+                })
+                .map(|osc| osc.as_nrt_row())
+                .collect();
+
+            for m in message_rows {
+                scd_rows.push(m);
+            }
+
+            let script = create_nrt_script(
+                nrt_record_msg.bpm,
+                &nrt_record_msg.file_name,
+                nrt_record_msg.end_beat,
+                scd_rows,
+            );
+
+            sc_arc.lock().unwrap().send_to_client(
+                OscMessage {
+                    addr: "/read_scd".to_string(),
+                    args: vec![OscType::String(script.unwrap())],
+                }
+            );
+
+            // TODO: Do something with the /nrt_done message
         })
+        // Treat each packet in batch-send as a separately interpreted packet
         .funnel_tbundle("batch-send")
         .begin();
 }

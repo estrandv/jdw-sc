@@ -69,7 +69,7 @@ impl SCProcessManager {
 
         info!("Starting supercollider with generated boot script");
 
-        let mut process = Popen::create(
+        let process = Popen::create(
             &["sclang", "temp/start_server.scd", "-u", &SCLANG_IN_PORT.to_string()],
             PopenConfig { stdout: Redirection::Merge, ..Default::default() }
         )?;

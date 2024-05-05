@@ -1,6 +1,10 @@
 import time
 from pythonosc import udp_client
 
+
+# TODO: Test likely dated since sample packs are no longer automatically loaded on startup
+# See: load_sample.py
+
 # Hardcoded default port of jdw-sc main application
 client = udp_client.SimpleUDPClient("127.0.0.1", 13331) # Straight to main application
 

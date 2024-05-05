@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+
 use crate::config::SERVER_NAME;
 use crate::osc_model::LoadSampleMessage;
 
@@ -27,7 +28,7 @@ impl Sample {
         )
     }
 
-    pub fn get_nrt_scd_row(&self, dir: &str) -> String {
+    pub fn get_nrt_scd_row(&self) -> String {
         let ret = format!(
             "[0.0, (Buffer.new(server, 44100 * 8.0, 2, bufnum: {})).allocReadMsg(\"{}\")]",
             self.buffer_number,
@@ -48,13 +49,18 @@ impl SamplePack {
     ) -> Sample {
         let pack_max_index = self.samples.len();
         let index = sample_number % pack_max_index;
+
         return if !category.is_empty() {
             let samples_in_category: Vec<Sample> = self.samples.iter()
                 .filter(|sample| sample.category_tag == category)
                 .map(|sample| sample.clone())
                 .collect();
 
-            samples_in_category.get(index).unwrap().clone()
+            if !samples_in_category.is_empty() {
+                samples_in_category.get(sample_number % samples_in_category.len()).unwrap().clone()
+            } else {
+                self.samples.get(index).unwrap().clone()
+            }
         } else {
             self.samples.get(index).unwrap().clone()
         }
@@ -99,14 +105,13 @@ impl SamplePackDict {
         sample_pack: &str,
         sample_number: usize,
         category: &str
-    ) -> Sample {
+    ) -> Option<Sample> {
 
-        let found = self.sample_packs.get(sample_pack).unwrap().find(
-            sample_number,
-            category
-        );
+        self.sample_packs.get(sample_pack).map(|pack| pack.find(sample_number, category))
+    }
 
-        found
+    pub fn get_all_samples(&self) -> Vec<Sample> {
+        return self.sample_packs.values().flat_map(|pack| pack.samples.clone()).collect()
     }
 
 }

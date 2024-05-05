@@ -6,12 +6,13 @@ use std::sync::{Arc, Mutex};
 
 use bigdecimal::BigDecimal;
 use jdw_osc_lib::model::TimedOSCPacket;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use regex::Regex;
 use rosc::{OscMessage, OscPacket, OscType};
 
 use crate::{NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, PlaySampleMessage, SamplePackCollection};
 use crate::node_lookup::NodeIDRegistry;
+use crate::sampling::SamplePackDict;
 
 pub trait SuperColliderMessage {
     fn as_osc(&self, reg: Arc<Mutex<NodeIDRegistry>>) -> Vec<TimedOSCPacket>;
@@ -119,6 +120,26 @@ pub struct PreparedPlaySampleMessage {
 
 impl PlaySampleMessage {
 
+    pub fn prepare(self, buffer_number: i32) -> PreparedPlaySampleMessage {
+        let mut base_args = self.args.clone();
+
+        if base_args.iter()
+            .map(|arg| arg.clone())
+            .find(|arg| arg.clone().string().is_some_and(|a| a == "buf"))
+            .is_some() {
+            warn!("Sample play request contained a preset arg for 'buf', which can impact sample playback.");
+        }
+
+        base_args.push(OscType::String("buf".to_string()));
+        base_args.push(OscType::Int(buffer_number));
+
+        PreparedPlaySampleMessage {
+            external_id: self.external_id,
+            args: base_args
+        }
+    }
+
+    // TODO: Legacy
     pub fn with_buffer_arg(self, samples: Arc<Mutex<SamplePackCollection>>) -> PreparedPlaySampleMessage {
         let mut base_args = self.args.clone();
 
@@ -156,4 +177,51 @@ impl SuperColliderMessage for PreparedPlaySampleMessage {
         )]
     }
 
+}
+
+
+// TODO: Not happy with dict usage, but at least this moves it out of the way for now...
+pub fn resolve_msg(packet: OscPacket, dict: Arc<Mutex<SamplePackDict>>) -> Box<dyn SuperColliderMessage> {
+
+    let msg = match packet {
+        OscPacket::Message(msg) => {
+            Some(msg)
+        }
+        OscPacket::Bundle(_) => {
+            None
+        }
+    }.unwrap();
+
+    let sc_msg: Option<Box<dyn SuperColliderMessage>> = match msg.addr.as_str() {
+        "/note_on_timed" => {
+            Some(Box::new(NoteOnTimedMessage::new(&msg.clone())
+                .unwrap()))
+        }
+        "/play_sample" => {
+            Some(Box::new(PlaySampleMessage::new(&msg.clone()).map(|play_sample| {
+                let cat = play_sample.category.clone().unwrap_or("".to_string());
+                let buf = dict.lock().unwrap().find(
+                    &play_sample.sample_pack.to_string(),
+                    play_sample.index,
+                    &cat
+                ).map(|sample| sample.buffer_number).unwrap_or(0);
+                // TODO: warn on missing sample
+                play_sample.prepare(buf)
+            }).unwrap()))
+        }
+        "/note_on" => {
+            Some(Box::new(NoteOnMessage::new(&msg.clone())
+                .unwrap()))
+        }
+        "/note_modify" => {
+            Some(Box::new(NoteModifyMessage::new(&msg.clone())
+                .unwrap()))
+        }
+        _ => {
+            None
+        }
+
+    };
+
+    return sc_msg.unwrap();
 }

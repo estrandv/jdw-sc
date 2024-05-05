@@ -6,10 +6,18 @@ use bigdecimal::BigDecimal;
 use jdw_osc_lib::model::TimedOSCPacket;
 use log::{debug, error, info, warn};
 use rosc::{OscBundle, OscMessage, OscPacket, OscType};
-
-use crate::{create_nrt_script, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage, SamplePackCollection, scd_templating, SuperColliderMessage};
+use crate::internal_osc_conversion::SuperColliderMessage;
+use crate::scd_templating;
+use crate::SamplePackCollection;
+use crate::PlaySampleMessage;
+use crate::NRTRecordMessage;
+use crate::NoteOnTimedMessage;
+use crate::NoteOnMessage;
+use crate::NoteModifyMessage;
+use crate::create_nrt_script;
 use crate::node_lookup::NodeIDRegistry;
 use crate::samples::Sample;
+use crate::sampling::SamplePackDict;
 
 impl Sample {
     // Buffer load as-osc, suitable for loading into the NRT server
@@ -118,7 +126,7 @@ impl NRTRecordMessage {
     }
 }
 
-trait NRTConvert {
+pub trait NRTConvert {
     fn as_nrt_row(&self) -> String;
 }
 
@@ -164,6 +172,8 @@ impl NRTConvert for TimedOSCPacket {
     }
 }
 
+
+// TODO: Legacy
 pub fn get_nrt_record_scd(
     msg: &NRTRecordMessage,
     buffer_handle: Arc<Mutex<SamplePackCollection>>,
