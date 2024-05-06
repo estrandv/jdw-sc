@@ -146,7 +146,7 @@ impl SuperColliderMessage for PreparedPlaySampleMessage {
         let node_id = reg.lock().unwrap().create_node_id(&self.external_id);
         vec![create_s_new(
             node_id,
-            "sampler", // Refers to sampler.scd, the "synth" used to play buffer samples
+            "sampler", // The "synth" used to play buffer samples
             &self.args
         )]
     }

@@ -129,6 +129,17 @@ fn main() {
 
     let node_reg = Arc::new(Mutex::new(NodeIDRegistry::new()));
 
+
+    // Ready the sampler synth - similar to a create_synthdef call.
+    let sampler_def = scd_templating::read_scd_file("sampler.scd");
+    synthdef_snippets_arc.lock().unwrap().push(sampler_def.clone());
+    sc_arc.lock().unwrap().send_to_client(OscMessage {
+        addr: "/read_scd".to_string(),
+        args: vec![
+            OscType::String(sampler_def + ".add;"),
+        ],
+    });
+
     fn beep(freq: f32, node_reg: Arc<Mutex<NodeIDRegistry>>) -> Vec<TimedOSCPacket> {
         NoteOnTimedMessage::new(&OscMessage {
             addr: "/note_on_timed".to_string(),
