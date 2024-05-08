@@ -1,41 +1,18 @@
-use std::{fs, thread};
-use std::cell::RefCell;
 use std::fs::File;
-use std::io::{Empty, Write};
+use std::io::Write;
 use std::net::{SocketAddrV4, UdpSocket};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
+use std::{fs, thread};
 use std::time::{Duration, Instant, SystemTime};
-
 use bigdecimal::{BigDecimal, ToPrimitive, Zero};
 use jdw_osc_lib::model::TimedOSCPacket;
-use log::{debug, info, warn};
-use regex::{Error, Regex};
+use log::{debug, info};
 use rosc::{encoder, OscBundle, OscMessage, OscPacket, OscTime, OscType};
 use subprocess::{Popen, PopenConfig, Redirection};
-
-use crate::{config, scd_templating};
 use crate::config::{SC_SERVER_INCOMING_READ_TIMEOUT, SCLANG_IN_PORT, SERVER_IN_PORT, SERVER_OUT_PORT};
-
-fn get_arg(args: Vec<OscType>, arg_name: &str) -> Option<OscType> {
-        let pos = args.iter().position(|arg| arg.clone() == OscType::String(arg_name.to_string()));
-
-        match pos {
-            Some(index) => {
-                let value_pos = index + 1;
-
-                match args.get(value_pos) {
-                    Some(val) => Some(val.clone()),
-                    None => None
-                }
-
-            },
-            None => None
-        }
-
-}
+use crate::{config, scd_templating};
 
 pub struct SCProcessManager {
     sclang_process: Popen,
@@ -95,7 +72,8 @@ impl SCProcessManager {
 
         // Note this sneaky configuration. Mostly needed so that wait_for method does not stay on forever ...
         // Seems to also enable ctrl+c interrupt for some reason.
-        incoming_socket.set_read_timeout(Option::Some(Duration::from_secs(SC_SERVER_INCOMING_READ_TIMEOUT)));
+        incoming_socket.set_read_timeout(Option::Some(Duration::from_secs(SC_SERVER_INCOMING_READ_TIMEOUT)))
+            .unwrap();
 
         Ok(SCProcessManager {
             sclang_process: process,
@@ -103,10 +81,6 @@ impl SCProcessManager {
             sclang_out_addr: sclang_addr,
             scsynth_out_addr: scsynth_addr,
         })
-    }
-
-    pub fn is_alive(&mut self) -> bool {
-        !self.sclang_process.poll().is_some()
     }
 
     pub fn terminate(&mut self) {

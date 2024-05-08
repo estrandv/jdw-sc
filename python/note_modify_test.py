@@ -46,7 +46,7 @@ time.sleep(1.0)
 
 client.send_message("/note_modify", [
     "brute_MODTEST_1", # External id regex - here an exact match for our id
-    0,
+    0, # Delay
     "freq", # Args, same as any note_on message
     380.0,
     "lfoS",

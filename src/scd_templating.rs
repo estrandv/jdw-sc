@@ -17,21 +17,19 @@ pub fn create_nrt_script(
     file_name: &str,
     end_time: f32,
     message_scd_rows: Vec<String>
-) -> Result<String, String> {
+) -> String {
 
     let mut text = read_scd_file("nrt_record.scd.template");
 
     let score_row = message_scd_rows.join(",\n");
 
-    // TODO: Problem. Managed messages arrive without bpm with times in seconds.
-    //  Maybe they shouldn't? Conversion is not expensive.
     text = text.replace("{:bpm}", &format!("{}", bpm));
     text = text.replace("{:file_name}", file_name);
     text = text.replace("{:score_rows}", &score_row);
     text = text.replace("{:end_time}", &format!("{}", end_time));
     text = text.replace("{:out_socket_name}", SERVER_OSC_SOCKET_NAME);
 
-    Ok(text)
+    text
 
 }
 

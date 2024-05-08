@@ -10,6 +10,7 @@ server = Server(\nrt,
 
 //server.latency = 0.05;
 
+// TODO: Pretty sure buffers are added in score now - but this is how a bus would be added, too! 
 buf = Buffer.new(server, 0, 1);
 
 a = Score([

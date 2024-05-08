@@ -3,9 +3,6 @@
     OSC structs for careful parsing and management of expected message and bundle types.
  */
 
-use std::convert::TryFrom;
-use std::option::Option;
-use std::str::FromStr;
 
 use bigdecimal::BigDecimal;
 use jdw_osc_lib::model::{OscArgHandler, TaggedBundle, TimedOSCPacket};
@@ -54,24 +51,6 @@ pub struct LoadSampleMessage {
     pub category_tag: String,
 }
 
-/*
-    TODO: Be the new standard for buffer loading
-    - remake the sample dict - it is too complex right now
-    - buffer_number is a unique id across everything
-    - when resolving "Nth sample in pack", it is done via index in the pack's list of samples
-        - Same order for category
-    - So a typical question asked is "what is the buffer number of the third sample in this named pack?"
-        - map<str, pack>[key].get(index) / .getWithTag("tag", index)
-    - We need:
-        - Same dict and packs, but with live-modification and empty constructors
-        - handling of the below message to create entries (No osc conversion needed for this message itself)
-
-    UPDATE:
-    - Existing sample pack structure isn't really built for handling custom paths per sample
-        ... and other things
-        ... so best if we make a whole new structure and just steal the conversion parts
-
- */
 impl LoadSampleMessage {
     pub fn new(msg: &OscMessage) -> Result<LoadSampleMessage, String> {
         msg.expect_addr("/load_sample")?;

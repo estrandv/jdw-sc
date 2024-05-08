@@ -35,11 +35,6 @@ impl NodeIDRegistry {
 
     }
 
-    // Get node_id by external_id, if present
-    pub fn get_node_id(&self, external_id: String) -> Option<i32> {
-        self.registry.borrow().get(&external_id).map(|int| int.clone())
-    }
-
     // Get all node_ids matching regex
     pub fn regex_search_node_ids(&self, external_id_regex: &str) -> Vec<i32> {
 
@@ -66,6 +61,7 @@ impl NodeIDRegistry {
     }
 
     // Remove an external_id's node_id from the registry, if present
+    #[allow(dead_code)]
     pub fn clear(&self, external_id: String) {
         if self.registry.borrow().contains_key(&external_id) {
             let mut new_reg = self.registry.clone().into_inner();

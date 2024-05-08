@@ -1,33 +1,28 @@
 #![feature(result_flattening)]
 
-use std::f32;
+
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::Duration;
-
 use bigdecimal::BigDecimal;
 use home::home_dir;
-use jdw_osc_lib::model::{OscArgHandler, TaggedBundle, TimedOSCPacket};
+use jdw_osc_lib::model::{OscArgHandler, TimedOSCPacket};
 use jdw_osc_lib::osc_stack::OSCStack;
-use json::Array;
-use log::{debug, error, info, LevelFilter, warn};
-use regex::Replacer;
-use rosc::{OscMessage, OscPacket, OscType};
+use log::{error, info};
+use rosc::{OscMessage, OscType};
 use simple_logger::SimpleLogger;
-use subprocess::{Exec, Popen, PopenConfig, Redirection};
-
 use crate::config::APPLICATION_IN_PORT;
 use crate::internal_osc_conversion::SuperColliderMessage;
 use crate::node_lookup::NodeIDRegistry;
 use crate::nrt_record::NRTConvert;
 use crate::osc_model::{LoadSampleMessage, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, NRTRecordMessage, PlaySampleMessage};
 use crate::sampling::SamplePackDict;
+use crate::sc_process_management::SCProcessManager;
 use crate::scd_templating::create_nrt_script;
-use crate::supercollider::SCProcessManager;
 
-mod supercollider;
+mod sc_process_management;
 mod scd_templating;
 mod osc_model;
 mod nrt_record;
@@ -43,35 +38,7 @@ mod sampling;
     - SET_BPM
         - Should store a BPM for NRT as well as set it for the running server if that is possible (in order to auto-adjust args)
         - Since this will be saved in state, it becomes less important that NRT_RECORD has a bpm parameter 
-        - Should also adjust GATE_TIME, since the current logic uses a time-stamp for the gate-off message 
-
-    - CREATE_SYNTH
-        - See dev_diary for explanation why it has to be synth specifically 
-        - Note existing code: 
-            - All synths code files are read and templated in the same call, which happens twice (startup and NRT)
-            - Much like for the sample dict, we should have a struct containing all loaded templates at all times
-            - This struct can then export arrays when needed and be supplied to NRT record
-            - Calls to /create_synth should immediately add the supplied template
-            - I SAY TEMPLATE BUT WE SHOULD DITCH THAT 
-                - :synth_name can be manually supplied and has little bearing when files are not the basis anymore 
-                - :operation is just the end-part of the file, arguably not part of the synthDef either, so we can just append 
-
-    - LOAD_SAMPLE
-        - Also has some background in dev_diary
-        - Basically, we can add one sample file at a time by supplying the right paramteters 
-            - sample_pack: Add to this pack, create it if not yet present 
-            - index: This is sample number <index> in the given pack 
-            - path (absolute): Read the sample file from here 
-            - category: Group sample in this category
-        - Note that existing structures (sample dict) should be able to acocmodate this without any radical changes 
-            -> Which also means it should work just fine with NRT 
-
-    - CREATE_EFFECT 
-        - Note the above! An effect is essentially just a synth that routes sound from one buffer to another 
-        - So this would go under CREATE_SYNTH but with a slightly different template supplied 
-        - The neat thing of course being that this handles NRT as well! 
-        - Remember: Effects are a bit special in terms of group id and placement in chain 
-        
+        - Should also adjust GATE_TIME, since the current logic uses a time-stamp for the gate-off message
 */
 
 fn main() {
@@ -243,62 +210,66 @@ fn main() {
         })
         .on_tbundle("nrt_record", &|tagged_bundle| {
 
+            match NRTRecordMessage::from_bundle(tagged_bundle) {
+                Ok(nrt_record_msg) => {
 
-            // TODO: Now implemented with custom load methods - clean all dead code before making the below more readable! 
+                    // Begin building the score rows with the sythdef creation strings
+                    let mut score_rows: Vec<String> = synthdef_snippets_arc.lock().unwrap().iter()
+                        .map(|def| def.clone() + ".asBytes")
+                        .map(|def| { return scd_templating::nrt_wrap_synthdef(&def); })
+                        .collect();
 
-            let sample_rows: Vec<String> = sample_pack_dict_arc.lock().unwrap()
-                .get_all_samples().iter().map(|sample| sample.get_nrt_scd_row())
-                .collect();
+                    // Add the buffer reads for samples to the score
+                    for sample in sample_pack_dict_arc.lock().unwrap().get_all_samples() {
+                        score_rows.push(sample.get_nrt_scd_row());
+                    }
 
-            let synthdefs: Vec<String> = synthdef_snippets_arc.lock().unwrap().iter().map(|def| def.clone() + ".asBytes").collect();
 
-            // TODO: Compat reading of the scd dir - should eventually be removed in favour of "synthdef_scds".
-            let mut scd_rows: Vec<_> = synthdefs.iter()
-                .map(|def| { return scd_templating::nrt_wrap_synthdef(def); })
-                .collect();
+                    // Collect messages to be played as score rows along a timeline
+                    let reg_handle = Arc::new(Mutex::new(NodeIDRegistry::new()));
+                    let mut current_beat = BigDecimal::from_str("0.0").unwrap();
+                    let timeline_score_rows: Vec<String> = nrt_record_msg.messages.iter()
+                        .flat_map(|timed_packet| {
 
-            for s in sample_rows {
-                scd_rows.push(s);
-            }
+                            let osc = internal_osc_conversion::resolve_msg(
+                                timed_packet.packet.clone(),
+                                sample_pack_dict_arc.clone()
+                            ).as_nrt_osc(reg_handle.clone(), current_beat.clone());
 
-            // TODO: Implementing the message rows as above - skipping error handling of from_bundle...
+                            current_beat += timed_packet.time.clone();
 
-            let nrt_record_msg = NRTRecordMessage::from_bundle(tagged_bundle).unwrap();
+                            osc
+                        })
+                        .map(|osc| osc.as_nrt_row())
+                        .collect();
 
-            let registry = NodeIDRegistry::new();
-            let reg_handle = Arc::new(Mutex::new(registry));
+                    for m in timeline_score_rows {
+                        score_rows.push(m);
+                    }
 
-            let mut current_beat = BigDecimal::from_str("0.0").unwrap();
+                    let script = create_nrt_script(
+                        nrt_record_msg.bpm,
+                        &nrt_record_msg.file_name,
+                        nrt_record_msg.end_beat,
+                        score_rows,
+                    );
 
-            let message_rows: Vec<String> = nrt_record_msg.messages.iter()
-                .flat_map(|timed_packet| {
-                    let osc = internal_osc_conversion::resolve_msg(timed_packet.packet.clone(), sample_pack_dict_arc.clone())
-                        .as_nrt_osc(reg_handle.clone(), current_beat.clone());
-                    current_beat += timed_packet.time.clone();
-                    osc
-                })
-                .map(|osc| osc.as_nrt_row())
-                .collect();
+                    sc_arc.lock().unwrap().send_to_client(
+                        OscMessage {
+                            addr: "/read_scd".to_string(),
+                            args: vec![OscType::String(script)],
+                        }
+                    );
 
-            for m in message_rows {
-                scd_rows.push(m);
-            }
+                    // TODO: Do something with the /nrt_done message
 
-            let script = create_nrt_script(
-                nrt_record_msg.bpm,
-                &nrt_record_msg.file_name,
-                nrt_record_msg.end_beat,
-                scd_rows,
-            );
 
-            sc_arc.lock().unwrap().send_to_client(
-                OscMessage {
-                    addr: "/read_scd".to_string(),
-                    args: vec![OscType::String(script.unwrap())],
                 }
-            );
+                Err(e) => {
+                    error!("Failed to parse NRT record message: {}", e);
+                }
+            }
 
-            // TODO: Do something with the /nrt_done message
         })
         // Treat each packet in batch-send as a separately interpreted packet
         .funnel_tbundle("batch-send")
