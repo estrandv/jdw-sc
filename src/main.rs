@@ -152,8 +152,6 @@ fn main() {
         })
         .on_message("/play_sample", &|msg| {
 
-            // TODO: Now only uses new method
-
             let processed_message = PlaySampleMessage::new(&msg).unwrap();
             let delay = processed_message.delay_ms;
             let category = processed_message.category.clone().unwrap_or("".to_string());
@@ -234,7 +232,9 @@ fn main() {
                             let osc = internal_osc_conversion::resolve_msg(
                                 timed_packet.packet.clone(),
                                 sample_pack_dict_arc.clone()
-                            ).as_nrt_osc(reg_handle.clone(), current_beat.clone());
+                            ).map(|sc_msg| sc_msg.as_nrt_osc(
+                                reg_handle.clone(), current_beat.clone()
+                            )).unwrap_or(vec![]);
 
                             current_beat += timed_packet.time.clone();
 

@@ -149,7 +149,7 @@ impl SuperColliderMessage for PreparedPlaySampleMessage {
 
 
 // TODO: Not happy with dict usage, but at least this moves it out of the way for now...
-pub fn resolve_msg(packet: OscPacket, dict: Arc<Mutex<SamplePackDict>>) -> Box<dyn SuperColliderMessage> {
+pub fn resolve_msg(packet: OscPacket, dict: Arc<Mutex<SamplePackDict>>) -> Option<Box<dyn SuperColliderMessage>> {
 
     let msg = match packet {
         OscPacket::Message(msg) => {
@@ -185,11 +185,12 @@ pub fn resolve_msg(packet: OscPacket, dict: Arc<Mutex<SamplePackDict>>) -> Box<d
             Some(Box::new(NoteModifyMessage::new(&msg.clone())
                 .unwrap()))
         }
-        _ => {
+        msgtype => {
+            warn!("Unknown message type: {}", msgtype);
             None
         }
 
     };
 
-    return sc_msg.unwrap();
+    return sc_msg;
 }
