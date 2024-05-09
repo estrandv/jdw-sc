@@ -107,7 +107,7 @@ impl SCProcessManager {
         }
     }
 
-    fn send_with_delay(&self, msg: OscPacket, delay_ms: u64) {
+    pub fn send_with_delay(&self, msg: OscPacket, delay_ms: u64) {
         // TODO: Trying out some latency adjustments to fix desync issues
         // This is not the optimal way - these operations are highly reliant on context
 

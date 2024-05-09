@@ -11,7 +11,7 @@ use home::home_dir;
 use jdw_osc_lib::model::{OscArgHandler, TimedOSCPacket};
 use jdw_osc_lib::osc_stack::OSCStack;
 use log::{error, info};
-use rosc::{OscMessage, OscType};
+use rosc::{OscMessage, OscPacket, OscType};
 use simple_logger::SimpleLogger;
 use crate::config::APPLICATION_IN_PORT;
 use crate::internal_osc_conversion::SuperColliderMessage;
@@ -269,6 +269,15 @@ fn main() {
                     error!("Failed to parse NRT record message: {}", e);
                 }
             }
+
+        })
+        .on_message("/c_set", &|msg| {
+            // TODO: There should be a better way to
+            //  "forward message to server unchanged"
+            sc_arc.lock().unwrap().send_with_delay(
+                OscPacket::Message(msg),
+                0
+            );
 
         })
         // Treat each packet in batch-send as a separately interpreted packet
