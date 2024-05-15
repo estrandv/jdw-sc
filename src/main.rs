@@ -274,10 +274,32 @@ fn main() {
         .on_message("/c_set", &|msg| {
             // TODO: There should be a better way to
             //  "forward message to server unchanged"
+	    // UPDATE: Actually, you can send this directly to the scsynth port from ROUTER 
             sc_arc.lock().unwrap().send_with_delay(
                 OscPacket::Message(msg),
                 0
             );
+
+        })
+        .on_message("/free_notes", &|msg| {
+
+            // Example: "/free_notes", ["(.*)keyboard(.*)"]
+            
+            let regex = msg.args.get(0)
+                .expect("/free_notes: No regex as 0th arg!")
+                .clone().string().expect("/free_notes: 0th regex arg not parseable as string!");
+
+            let node_ids = reg.lock().unwrap().regex_search_node_ids(regex.as_str());
+
+            for node_id in node_ids {
+                sc_arc.lock().unwrap().send_with_delay(
+                    OscPacket::Message(OscMessage {
+                        addr: "/n_free".to_string(),
+                        args: vec![OscType::Int(node_id)],
+                    }),
+                    0
+                );
+            }
 
         })
         // Treat each packet in batch-send as a separately interpreted packet
