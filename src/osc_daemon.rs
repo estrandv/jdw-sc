@@ -4,7 +4,7 @@ use std::{
 };
 
 use bigdecimal::BigDecimal;
-use jdw_osc_lib::model::{OscArgHandler, TaggedBundle};
+use jdw_osc_lib::model::{OscArgHandler, TaggedBundle, TimedOSCPacket};
 use log::{error, warn};
 use rosc::{OscMessage, OscPacket, OscType};
 
@@ -26,6 +26,22 @@ impl Interpreter {
         match packet {
             OscPacket::Message(osc_message) => {
                 match osc_message.addr.as_str() {
+                    "/free_notes" => {
+                        let regex = osc_message.get_string_at(0, "Regex string").unwrap();
+
+                        let node_ids = self.reg.regex_search_node_ids(&regex);
+
+                        for node_id in node_ids {
+
+                            let arg = OscType::Int(node_id);
+
+                            self.client.send_with_delay(
+                                OscPacket::Message(OscMessage {addr: "/n_free".to_string(), args: vec![arg]}),
+                                0
+                            );
+                        }
+
+                    },
                     "/note_on_timed" => {
                         let processed_message = NoteOnTimedMessage::new(&osc_message).unwrap();
                         let node_id = self.reg.create_node_id(&processed_message.external_id);
