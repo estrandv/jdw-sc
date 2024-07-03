@@ -44,41 +44,6 @@ mod osc_daemon;
 
 fn main() {
 
-    /*
-    
-    
-        TODO: Reducing locking
-    
-        - Threads in use: 
-            1. Main (setup) operations, calling e.g. the startup ping
-            2. OSC Read Closures 
-            3. (occasional) wait-for-message (does not require shared access)
-            4. ctrl+c capture 
-
-        - Basically: If the OSC stack didn't create a bunch of closures, we could just
-            move the SC insance in there and avoid all locking. If we figure out ctrl+c. 
-            -> ctrl+c is for termination, which is the only call we do directly to the process
-            -> so we can probably just rewrite that part of the code not to be so nestled
-    
-
-
-        SC HANDLING
-            - Keep the constructor, but create a substruct that does not need the process 
-            - addresses and socket and helper methods are good to have (but remove the arc-dependent one)
-            - Hopefully you can just break up the result object and use that to move the process reference
-
-        OSC DAEMON 
-            - Starts a loop of OSC reading, taking an sc client with it
-    
-    
-    
-    
-    
-    
-    */
-
-
-
     // Handles all log macros, e.g. "warn!()" to print info in terminal
     SimpleLogger::new()
         .with_level(config::LOG_LEVEL)
@@ -87,31 +52,35 @@ fn main() {
     /*
         Prepare thread handler for the main supercollider instance
      */
-    let sc_process_manager = SCProcessManager::new().unwrap_or_else(|err| {
+
+    let sc_process_data = sc_process_management::init().unwrap_or_else(|err| {
         error!("ERROR BOOTING SUPERCOLLIDER: {:?}", err);
         exit(0)
     });
-    let sc_arc = Arc::new(Mutex::new(sc_process_manager));
-    let sc_arc_in_ctrlc = sc_arc.clone();
+
+    let client = sc_process_data.client;
+
+    let process_arc_interrupt = Arc::new(Mutex::new(sc_process_data.process));
+    let process_arc_failure = process_arc_interrupt.clone();
 
     // Terminate supercollider on ctrl+c
     ctrlc::set_handler(move || {
         info!("Thread abort requested");
-        sc_arc_in_ctrlc.lock().unwrap().terminate();
+        process_arc_interrupt.clone().lock().unwrap().terminate().unwrap();
         exit(0);
     }).expect("Error setting Ctrl-C handler");
 
     /*
         Wait for the custom /init message from the server (see start_server.scd.template).
      */
-    match sc_arc.lock().unwrap().await_response(
+    match client.await_response(
         "/init",
         vec![OscType::String("ok".to_string())],
         Duration::from_secs(10),
     ) {
         Err(e) => {
             error!("{}", e);
-            sc_arc.lock().unwrap().terminate();
+            process_arc_failure.lock().unwrap().terminate().unwrap();
         }
         Ok(()) => ()
     };
@@ -121,22 +90,20 @@ fn main() {
     // TODO: Sampler synth must be created on startup - could potentially be part of boot script!
 
     let sample_pack_dict = SamplePackDict::new();
-    let sample_pack_dict_arc = Arc::new(Mutex::new(sample_pack_dict));
 
     let mut sample_pack_dir = home_dir().unwrap();
     sample_pack_dir.push("sample_packs");
 
     // Populated via osc messages, used e.g. for NRT recording
-    let loaded_synthdef_snippets: Vec<String> = Vec::new();
-    let synthdef_snippets_arc = Arc::new(Mutex::new(loaded_synthdef_snippets));
+    let mut loaded_synthdef_snippets: Vec<String> = Vec::new();
 
     let node_reg = Arc::new(Mutex::new(NodeIDRegistry::new()));
 
 
     // Ready the sampler synth - similar to a create_synthdef call.
     let sampler_def = scd_templating::read_scd_file("sampler.scd");
-    synthdef_snippets_arc.lock().unwrap().push(sampler_def.clone());
-    sc_arc.lock().unwrap().send_to_client(OscMessage {
+    loaded_synthdef_snippets.push(sampler_def.clone());
+    client.send_to_client(OscMessage {
         addr: "/read_scd".to_string(),
         args: vec![
             OscType::String(sampler_def + ".add;"),
@@ -161,7 +128,7 @@ fn main() {
 
     // Play a welcoming tune in a really obtuse way.
     for i in [130.81, 146.83, 196.00] {
-        SCProcessManager::send_timed_packets(0, sc_arc.clone(), beep(i, node_reg.clone()));
+        client.send_timed_packets(0, beep(i, node_reg.clone()));
         sleep(Duration::from_millis(125));
     }
 
@@ -169,176 +136,7 @@ fn main() {
 
     info!("Startup completed, polling for messages ...");
 
-    OSCStack::init(config::get_addr(APPLICATION_IN_PORT))
-        .on_message("/note_on_timed", &|msg| {
-            let processed_message = NoteOnTimedMessage::new(&msg).unwrap();
-            SCProcessManager::send_timed_packets(
-                processed_message.delay_ms,
-                sc_arc.clone(),
-                processed_message.as_osc(reg.clone()),
-            );
-        })
-        .on_message("/note_on", &|msg| {
-            let processed_message = NoteOnMessage::new(&msg).unwrap();
-            SCProcessManager::send_timed_packets(
-                processed_message.delay_ms,
-                sc_arc.clone(),
-                processed_message.as_osc(reg.clone()),
-            );
-        })
-        .on_message("/play_sample", &|msg| {
-
-            let processed_message = PlaySampleMessage::new(&msg).unwrap();
-            let delay = processed_message.delay_ms;
-            let category = processed_message.category.clone().unwrap_or("".to_string());
-            let buffer_number = sample_pack_dict_arc.lock().unwrap().find(
-                &processed_message.sample_pack,
-                processed_message.index,
-                &category,
-            ).map(|sample| sample.buffer_number).unwrap_or(0);
-            // TODO: Error handle missing sample
-
-            let internal_msg = processed_message.prepare(
-                buffer_number
-            );
-            SCProcessManager::send_timed_packets(
-                delay,
-                sc_arc.clone(),
-                internal_msg.as_osc(reg.clone()),
-            );
-        })
-        .on_message("/note_modify", &|msg| {
-            let processed_message = NoteModifyMessage::new(&msg).unwrap();
-            SCProcessManager::send_timed_packets(
-                processed_message.delay_ms,
-                sc_arc.clone(),
-                processed_message.as_osc(reg.clone()),
-            );
-        })
-        .on_message("/read_scd", &|msg| {
-            sc_arc.lock().unwrap().send_to_client(msg);
-        })
-        .on_message("/load_sample", &|msg| {
-            let resolved = LoadSampleMessage::new(&msg).unwrap();
-            let sample = sample_pack_dict_arc.lock().unwrap().register_sample(resolved)
-                .unwrap();
-            sc_arc.lock().unwrap().send_to_client(OscMessage {
-                addr: "/read_scd".to_string(),
-                args: vec![
-                    OscType::String(sample.get_buffer_load_scd()),
-                ],
-            });
-        })
-        .on_message("/create_synthdef", &|msg| {
-
-            // save scd in state, run scd in sclang
-            let definition = msg.get_string_at(0, "Synthdef scd string").unwrap();
-            synthdef_snippets_arc.lock().unwrap().push(definition.clone());
-            let add_call = definition + ".add;";
-            sc_arc.lock().unwrap().send_to_client(OscMessage {
-                addr: "/read_scd".to_string(),
-                args: vec![
-                    OscType::String(add_call),
-                ],
-            });
-        })
-        .on_tbundle("nrt_record", &|tagged_bundle| {
-
-            match NRTRecordMessage::from_bundle(tagged_bundle) {
-                Ok(nrt_record_msg) => {
-
-                    // Begin building the score rows with the sythdef creation strings
-                    let mut score_rows: Vec<String> = synthdef_snippets_arc.lock().unwrap().iter()
-                        .map(|def| def.clone() + ".asBytes")
-                        .map(|def| { return scd_templating::nrt_wrap_synthdef(&def); })
-                        .collect();
-
-                    // Add the buffer reads for samples to the score
-                    for sample in sample_pack_dict_arc.lock().unwrap().get_all_samples() {
-                        score_rows.push(sample.get_nrt_scd_row());
-                    }
+    osc_daemon::run(config::get_addr(config::APPLICATION_IN_PORT), client, sample_pack_dict, loaded_synthdef_snippets);
 
 
-                    // Collect messages to be played as score rows along a timeline
-                    let reg_handle = Arc::new(Mutex::new(NodeIDRegistry::new()));
-                    let mut current_beat = BigDecimal::from_str("0.0").unwrap();
-                    let timeline_score_rows: Vec<String> = nrt_record_msg.messages.iter()
-                        .flat_map(|timed_packet| {
-
-                            let osc = internal_osc_conversion::resolve_msg(
-                                timed_packet.packet.clone(),
-                                sample_pack_dict_arc.clone()
-                            ).map(|sc_msg| sc_msg.as_nrt_osc(
-                                reg_handle.clone(), current_beat.clone()
-                            )).unwrap_or(vec![]);
-
-                            current_beat += timed_packet.time.clone();
-
-                            osc
-                        })
-                        .map(|osc| osc.as_nrt_row())
-                        .collect();
-
-                    for m in timeline_score_rows {
-                        score_rows.push(m);
-                    }
-
-                    let script = create_nrt_script(
-                        nrt_record_msg.bpm,
-                        &nrt_record_msg.file_name,
-                        nrt_record_msg.end_beat,
-                        score_rows,
-                    );
-
-                    sc_arc.lock().unwrap().send_to_client(
-                        OscMessage {
-                            addr: "/read_scd".to_string(),
-                            args: vec![OscType::String(script)],
-                        }
-                    );
-
-                    // TODO: Do something with the /nrt_done message
-
-
-                }
-                Err(e) => {
-                    error!("Failed to parse NRT record message: {}", e);
-                }
-            }
-
-        })
-        .on_message("/c_set", &|msg| {
-            // TODO: There should be a better way to
-            //  "forward message to server unchanged"
-	    // UPDATE: Actually, you can send this directly to the scsynth port from ROUTER 
-            sc_arc.lock().unwrap().send_with_delay(
-                OscPacket::Message(msg),
-                0
-            );
-
-        })
-        .on_message("/free_notes", &|msg| {
-
-            // Example: "/free_notes", ["(.*)keyboard(.*)"]
-
-            let regex = msg.args.get(0)
-                .expect("/free_notes: No regex as 0th arg!")
-                .clone().string().expect("/free_notes: 0th regex arg not parseable as string!");
-
-            let node_ids = reg.lock().unwrap().regex_search_node_ids(regex.as_str());
-
-            for node_id in node_ids {
-                sc_arc.lock().unwrap().send_with_delay(
-                    OscPacket::Message(OscMessage {
-                        addr: "/n_free".to_string(),
-                        args: vec![OscType::Int(node_id)],
-                    }),
-                    0
-                );
-            }
-
-        })
-        // Treat each packet in batch-send as a separately interpreted packet
-        .funnel_tbundle("batch-send")
-        .begin();
 }

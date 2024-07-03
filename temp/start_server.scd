@@ -21,30 +21,6 @@ s.waitForBoot({
 	("Client Port: " + NetAddr.langPort).postln;
 
 	/*
-		Custom function for calling scd scripts via osc during runtime.
-
-		MSG: customScript, <scd_file_path>
-	*/
-	OSCFunc(
-		{
-			arg msg, time, addr, port;
-			var file_path, fn;
-
-			// Get local filename
-
-			file_path = msg[1].asString;
-
-			fn = File(file_path, "r");
-			fn.readAllString.interpret;
-			fn.close;
-
-			o.sendMsg("/customscript_done", "ok");
-
-		},
-		'/customscript'
-	);
-
-	/*
     		Custom function for flat out reading plain scd strings
 
     		MSG: read_scd, <scd string>
