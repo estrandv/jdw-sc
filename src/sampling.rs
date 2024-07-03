@@ -10,10 +10,12 @@ pub struct Sample {
     pub category_tag: String,
 }
 
+#[derive(Clone)]
 pub struct SamplePack {
     pub samples: Vec<Sample>
 }
 
+#[derive(Clone)]
 pub struct SamplePackDict {
     sample_packs: HashMap<String, SamplePack>
 }

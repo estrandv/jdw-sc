@@ -8,6 +8,12 @@ use crate::node_lookup::NodeIDRegistry;
 use crate::osc_model::{NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, PlaySampleMessage};
 use crate::sampling::SamplePackDict;
 
+pub trait SuperColliderNewMessage {
+    fn create_osc(&self, node_id: i32) -> Vec<TimedOSCPacket>;
+    fn create_nrt_osc(&self, node_id: i32, start_time: BigDecimal) -> Vec<TimedOSCPacket>;
+}
+
+// TODO: Legacy, moving away from ARC reliance
 pub trait SuperColliderMessage {
     fn as_osc(&self, reg: Arc<Mutex<NodeIDRegistry>>) -> Vec<TimedOSCPacket>;
     fn as_nrt_osc(&self, reg: Arc<Mutex<NodeIDRegistry>>, start_time: BigDecimal) -> Vec<TimedOSCPacket> {
@@ -67,6 +73,35 @@ impl SuperColliderMessage for NoteOnTimedMessage {
 
 }
 
+impl NoteOnTimedMessage {
+    pub fn create_osc(&self, node_id: i32) -> Vec<TimedOSCPacket> {
+        let on_message = create_s_new(node_id, &self.synth_name, &self.args);
+
+        let off_packet = OscPacket::Message(OscMessage {
+            addr: "/n_set".to_string(),
+            args: vec![
+                OscType::Int(node_id), // NodeID
+                OscType::String("gate".to_string()), // gate=0 is note off
+                OscType::Float(0.0)
+            ]
+        });
+
+        let off_message = TimedOSCPacket {time: self.gate_time.clone(), packet: off_packet };
+
+        vec![on_message, off_message]
+    }
+
+}
+
+impl NoteOnMessage {
+    pub fn create_osc(&self, node_id: i32) -> Vec<TimedOSCPacket> {
+        let msg = create_s_new(node_id, &self.synth_name, &self.args);
+
+        vec![msg]
+    }
+
+}
+
 impl SuperColliderMessage for NoteOnMessage {
     fn as_osc(&self, reg: Arc<Mutex<NodeIDRegistry>>) -> Vec<TimedOSCPacket> {
         let node_id = reg.lock().unwrap().create_node_id(&self.external_id);
@@ -75,6 +110,28 @@ impl SuperColliderMessage for NoteOnMessage {
         vec![msg]
     }
 
+}
+
+impl NoteModifyMessage {
+    pub fn create_osc(&self, node_ids: Vec<i32>) -> Vec<TimedOSCPacket> {
+        node_ids.iter()
+            .map(|id| {
+                let mut final_ars = vec![
+                    OscType::Int(id.clone())
+                ];
+
+                final_ars.extend(self.args.clone());
+
+                let message = OscMessage {
+                    addr: "/n_set".to_string(),
+                    args: final_ars
+                };
+
+                let packet = OscPacket::Message(message.clone());
+
+                TimedOSCPacket {time: BigDecimal::from_str("0.0").unwrap(), packet }
+            }).collect()
+    }
 }
 
 impl SuperColliderMessage for NoteModifyMessage {
@@ -136,8 +193,20 @@ impl PlaySampleMessage {
 }
 
 impl SuperColliderMessage for PreparedPlaySampleMessage {
+    
     fn as_osc(&self, reg: Arc<Mutex<NodeIDRegistry>>) -> Vec<TimedOSCPacket> {
         let node_id = reg.lock().unwrap().create_node_id(&self.external_id);
+        vec![create_s_new(
+            node_id,
+            "sampler", // The "synth" used to play buffer samples
+            &self.args
+        )]
+    }
+
+}
+
+impl PreparedPlaySampleMessage {
+    pub fn create_osc(&self, node_id: i32) -> Vec<TimedOSCPacket> {
         vec![create_s_new(
             node_id,
             "sampler", // The "synth" used to play buffer samples

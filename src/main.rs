@@ -30,6 +30,7 @@ mod config;
 mod internal_osc_conversion;
 mod node_lookup;
 mod sampling;
+mod osc_daemon;
 
 
 /*
@@ -42,6 +43,41 @@ mod sampling;
 */
 
 fn main() {
+
+    /*
+    
+    
+        TODO: Reducing locking
+    
+        - Threads in use: 
+            1. Main (setup) operations, calling e.g. the startup ping
+            2. OSC Read Closures 
+            3. (occasional) wait-for-message (does not require shared access)
+            4. ctrl+c capture 
+
+        - Basically: If the OSC stack didn't create a bunch of closures, we could just
+            move the SC insance in there and avoid all locking. If we figure out ctrl+c. 
+            -> ctrl+c is for termination, which is the only call we do directly to the process
+            -> so we can probably just rewrite that part of the code not to be so nestled
+    
+
+
+        SC HANDLING
+            - Keep the constructor, but create a substruct that does not need the process 
+            - addresses and socket and helper methods are good to have (but remove the arc-dependent one)
+            - Hopefully you can just break up the result object and use that to move the process reference
+
+        OSC DAEMON 
+            - Starts a loop of OSC reading, taking an sc client with it
+    
+    
+    
+    
+    
+    
+    */
+
+
 
     // Handles all log macros, e.g. "warn!()" to print info in terminal
     SimpleLogger::new()
@@ -284,7 +320,7 @@ fn main() {
         .on_message("/free_notes", &|msg| {
 
             // Example: "/free_notes", ["(.*)keyboard(.*)"]
-            
+
             let regex = msg.args.get(0)
                 .expect("/free_notes: No regex as 0th arg!")
                 .clone().string().expect("/free_notes: 0th regex arg not parseable as string!");
