@@ -1,11 +1,14 @@
-var server, buf;
+var server, buf, opts;
 
 TempoClock.default.tempo = {:bpm}/60;
 
+opts = ServerOptions.new;
+opts.numOutputBusChannels = 2;
+opts.numInputBusChannels = 2;
+opts.sampleRate = 48000;
+
 server = Server(\nrt,
-    options: ServerOptions.new
-    .numOutputBusChannels_(2)
-    .numInputBusChannels_(2)
+    options: opts
 );
 
 //server.latency = 0.05;

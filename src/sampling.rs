@@ -88,18 +88,24 @@ impl SamplePackDict {
         }
 
         let pack = self.sample_packs.get_mut(&msg.sample_pack).unwrap();
+        let existing = pack.samples.iter().find(|s| s.file_path == msg.file_path).map(|s| s.clone());
 
+        // TODO: Might be a good idea to fail if present, or rewrite the buffer number completely 
         let sample = Sample {
             file_path: msg.file_path.to_string(),
             buffer_number: msg.buffer_number,
             category_tag: msg.category_tag.to_string(),
         };
 
-        pack.samples.push(sample.clone());
+        if !existing.is_some() {
+            pack.samples.push(sample.clone());
+        }
+
+        let selected = if existing.is_some() {existing.unwrap()} else {sample}; 
 
         // TODO: Some more error handling is probably a good idea, like for duplicate buffer numbers
         // TODO: ref of sample might be enough of a return
-        Ok(sample)
+        Ok(selected)
     }
 
     pub fn find(

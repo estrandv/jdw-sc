@@ -1,10 +1,9 @@
 use std::{
-    net::{SocketAddrV4, UdpSocket},
-    str::FromStr, sync::{Arc, Mutex},
+    fs::File, io::Write, net::{SocketAddrV4, UdpSocket}, str::FromStr, sync::{Arc, Mutex}
 };
 
 use bigdecimal::BigDecimal;
-use jdw_osc_lib::model::{OscArgHandler, TaggedBundle, TimedOSCPacket};
+use jdw_osc_lib::model::{OscArgHandler, TaggedBundle};
 use log::{error, warn};
 use rosc::{OscMessage, OscPacket, OscType};
 
@@ -113,14 +112,18 @@ impl Interpreter {
                         // save scd in state, run scd in sclang
                         let definition = osc_message.get_string_at(0, "Synthdef scd string").unwrap();
                         
-                        // TODO: Probably used for NRT and perhaps possible to keep in some struct here instead 
-                        self.synthef_snippets.push(definition.clone());
+                        // TODO: Probably used for NRT and perhaps possible to keep in some struct here instead
 
-                        let add_call = definition + ".add;";
-                        self.client.send_to_client(OscMessage {
-                            addr: "/read_scd".to_string(),
-                            args: vec![OscType::String(add_call)],
-                        });
+                        if !self.synthef_snippets.contains(&definition) {
+                            self.synthef_snippets.push(definition.clone());
+
+                            let add_call = definition + ".add;";
+                            self.client.send_to_client(OscMessage {
+                                addr: "/read_scd".to_string(),
+                                args: vec![OscType::String(add_call)],
+                            });
+                        }
+
                     },
                     _ => {},
                 }
@@ -151,7 +154,7 @@ impl Interpreter {
                         
                         
                                             // Collect messages to be played as score rows along a timeline
-                                            // TODO: Legacy internal osc conversion, but works for now 
+                                            // TODO: Legacy internal osc conversion, but works for now and is a mess to clean up 
                                             let reg_handle = Arc::new(Mutex::new(NodeIDRegistry::new()));
                                             let dict_clone = self.sample_pack_dict.clone();
                                             let sample_pack_dict_arc = Arc::new(Mutex::new(dict_clone));
@@ -183,6 +186,10 @@ impl Interpreter {
                                                 nrt_record_msg.end_beat,
                                                 score_rows,
                                             );
+
+                                            // TODO: DEBUG STUFF 
+                                            let mut file = File::create(&(nrt_record_msg.file_name + ".scd")).unwrap();
+                                            file.write_all(script.as_bytes()).unwrap();
                         
                                             self.client.send_to_client(
                                                 OscMessage {
