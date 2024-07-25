@@ -18,6 +18,7 @@ struct Interpreter {
     reg: NodeIDRegistry,
     sample_pack_dict: SamplePackDict,
     synthef_snippets: Vec<String>,
+    nrt_preloads: Vec<OscPacket>, // Packets to load on time 0.0 for all future nrt records 
 }
 
 impl Interpreter {
@@ -108,6 +109,9 @@ impl Interpreter {
                             ],
                         });
                     },
+                    "/clear_nrt" => {
+                        self.nrt_preloads.clear();
+                    },
                     "/create_synthdef" => {
                         // save scd in state, run scd in sclang
                         let definition = osc_message.get_string_at(0, "Synthdef scd string").unwrap();
@@ -137,6 +141,10 @@ impl Interpreter {
                             }
                         } else {
                             match tagged_bundle.bundle_tag.as_str() {
+                                "nrt_preload" => {
+                                    tagged_bundle.contents.iter().for_each(|packet| self.nrt_preloads.push(packet.clone()));
+                                    println!("Preloaded nrt packets: {}", self.nrt_preloads.len());
+                                },
                                 "nrt_record" => {
                                     match NRTRecordMessage::from_bundle(tagged_bundle) {
                                         Ok(nrt_record_msg) => {
@@ -159,6 +167,23 @@ impl Interpreter {
                                             let dict_clone = self.sample_pack_dict.clone();
                                             let sample_pack_dict_arc = Arc::new(Mutex::new(dict_clone));
                                             let mut current_beat = BigDecimal::from_str("0.0").unwrap();
+
+                                            let preload_rows: Vec<String> = self.nrt_preloads.iter()
+                                                .flat_map(|packet| {
+                        
+                                                    let osc = internal_osc_conversion::resolve_msg(
+                                                        packet.clone(),
+                                                        sample_pack_dict_arc.clone()
+                                                    ).map(|sc_msg| sc_msg.as_nrt_osc(
+                                                        reg_handle.clone(), current_beat.clone()
+                                                    )).unwrap_or(vec![]);
+                        
+                                                    osc
+                                                })
+                                                .map(|osc| osc.as_nrt_row())
+                                                .collect();
+
+
                                             let timeline_score_rows: Vec<String> = nrt_record_msg.messages.iter()
                                                 .flat_map(|timed_packet| {
                         
@@ -175,8 +200,17 @@ impl Interpreter {
                                                 })
                                                 .map(|osc| osc.as_nrt_row())
                                                 .collect();
+                                            
+                                            let mut all_rows: Vec<String> = vec![];
+                                            for row in preload_rows {
+                                                all_rows.push(row);
+                                            }
+                                            for row in timeline_score_rows {
+                                                all_rows.push(row);
+                                            }
+                                            
                         
-                                            for m in timeline_score_rows {
+                                            for m in all_rows {
                                                 score_rows.push(m);
                                             }
                         
@@ -188,8 +222,9 @@ impl Interpreter {
                                             );
 
                                             // TODO: DEBUG STUFF 
-                                            let mut file = File::create(&(nrt_record_msg.file_name + ".scd")).unwrap();
+                                            let mut file = File::create(&(nrt_record_msg.file_name.clone() + ".scd")).unwrap();
                                             file.write_all(script.as_bytes()).unwrap();
+                                            println!("Saved NRT script as: {}", nrt_record_msg.file_name);
                         
                                             self.client.send_to_client(
                                                 OscMessage {
@@ -231,7 +266,8 @@ pub fn run(host_url: String, client: SCClient, sample_pack_dict: SamplePackDict,
         client,
         reg: NodeIDRegistry::new(),
         sample_pack_dict: sample_pack_dict,
-        synthef_snippets: synthdef_snippets
+        synthef_snippets: synthdef_snippets,
+        nrt_preloads: vec![]
     };
 
     loop {

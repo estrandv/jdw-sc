@@ -225,6 +225,7 @@ pub fn resolve_msg(packet: OscPacket, dict: Arc<Mutex<SamplePackDict>>) -> Optio
             Some(msg)
         }
         OscPacket::Bundle(_) => {
+            warn!("UNEXPECTED BUNDLE IN RESOLVE_MSG");
             None
         }
     }.unwrap();
