@@ -18,7 +18,8 @@ struct Interpreter {
     reg: NodeIDRegistry,
     sample_pack_dict: SamplePackDict,
     synthef_snippets: Vec<String>,
-    nrt_preloads: Vec<OscPacket>, // Packets to load on time 0.0 for all future nrt records 
+    nrt_preloads: Vec<OscPacket>, // Packets to load on time 0.0 for all future nrt records,
+    bpm: i32
 }
 
 impl Interpreter {
@@ -42,12 +43,15 @@ impl Interpreter {
                         }
 
                     },
+                    "/set_bpm" => {
+                        self.bpm = osc_message.get_int_at(0, "BPM value").unwrap();
+                    },
                     "/note_on_timed" => {
                         let processed_message = NoteOnTimedMessage::new(&osc_message).unwrap();
                         let node_id = self.reg.create_node_id(&processed_message.external_id);
                         self.client.send_timed_packets(
                             processed_message.delay_ms,
-                            processed_message.create_osc(node_id),
+                            processed_message.create_osc(node_id, self.bpm),
                         );
                     },
                     "/note_on" => {
@@ -267,7 +271,8 @@ pub fn run(host_url: String, client: SCClient, sample_pack_dict: SamplePackDict,
         reg: NodeIDRegistry::new(),
         sample_pack_dict: sample_pack_dict,
         synthef_snippets: synthdef_snippets,
-        nrt_preloads: vec![]
+        nrt_preloads: vec![],
+        bpm: 120
     };
 
     loop {
