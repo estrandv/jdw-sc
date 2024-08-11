@@ -87,26 +87,18 @@ fn main() {
 
     info!("Server online!");
 
-    // TODO: Sampler synth must be created on startup - could potentially be part of boot script!
-
-    let sample_pack_dict = SamplePackDict::new();
-
     let mut sample_pack_dir = home_dir().unwrap();
     sample_pack_dir.push("sample_packs");
-
-    // Populated via osc messages, used e.g. for NRT recording
-    let mut loaded_synthdef_snippets: Vec<String> = Vec::new();
 
     let node_reg = Arc::new(Mutex::new(NodeIDRegistry::new()));
 
 
-    // Ready the sampler synth - similar to a create_synthdef call.
+    // Ready the sampler synth - similar to a create_synthdef call (which is why we let the interpreter know about it, too).
     let sampler_def = scd_templating::read_scd_file("sampler.scd");
-    loaded_synthdef_snippets.push(sampler_def.clone());
     client.send_to_client(OscMessage {
         addr: "/read_scd".to_string(),
         args: vec![
-            OscType::String(sampler_def + ".add;"),
+            OscType::String(sampler_def.clone() + ".add;"),
         ],
     });
 
@@ -136,7 +128,7 @@ fn main() {
 
     info!("Startup completed, polling for messages ...");
 
-    osc_daemon::run(config::get_addr(config::APPLICATION_IN_PORT), client, sample_pack_dict, loaded_synthdef_snippets);
+    osc_daemon::run(config::get_addr(config::APPLICATION_IN_PORT), client, sampler_def);
 
 
 }

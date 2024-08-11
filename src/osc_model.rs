@@ -44,6 +44,7 @@ impl NoteOnTimedMessage {
 
 }
 
+#[derive(Clone)]
 pub struct LoadSampleMessage {
     pub file_path: String,
     pub sample_pack: String,

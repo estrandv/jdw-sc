@@ -98,8 +98,7 @@ impl NoteOnTimedMessage {
         // Calculate time of off-message as seconds-from-beats
 
         let seconds = seconds_from_beats(bpm, self.gate_time.clone());
-        //let seconds = self.gate_time.clone(); // TODO: Temporarily testing unconverted  
-        info!("Sustain time was {}sec", seconds.clone());
+        //info!("Sustain time was {}sec", seconds.clone());
 
         let off_message = TimedOSCPacket {time: seconds, packet: off_packet };
 

@@ -17,12 +17,33 @@ struct Interpreter {
     client: SCClient,
     reg: NodeIDRegistry,
     sample_pack_dict: SamplePackDict,
+    nrt_sample_pack_dict: SamplePackDict,
     synthef_snippets: Vec<String>,
+    nrt_synthdef_snippets: Vec<String>, // Same as synthdef_snippets, but cleared with clear_nrt to avoid redundancy
+    sampler_synth_snippet: String, // Default of the sampler, to allow keeping it when we wipe the other nrt snippets
     nrt_preloads: Vec<OscPacket>, // Packets to load on time 0.0 for all future nrt records,
     bpm: i32
 }
 
 impl Interpreter {
+
+    fn new(
+        client: SCClient,
+        sampler_snippet: String
+    ) -> Interpreter {
+        Interpreter {
+            client,
+            reg: NodeIDRegistry::new(),
+            sample_pack_dict: SamplePackDict::new(),
+            nrt_sample_pack_dict: SamplePackDict::new(),
+            synthef_snippets: vec![sampler_snippet.clone()],
+            nrt_synthdef_snippets: vec![sampler_snippet.clone()],
+            sampler_synth_snippet: sampler_snippet,
+            nrt_preloads: vec![],
+            bpm: 120
+        }
+    }
+
     fn interpret(&mut self, packet: OscPacket) {
         match packet {
             OscPacket::Message(osc_message) => {
@@ -102,7 +123,8 @@ impl Interpreter {
                     "/load_sample" => {
                         let resolved = LoadSampleMessage::new(&osc_message).unwrap();
 
-                        // TODO: Probably used for NRT and perhaps possible to keep in some struct here instead 
+                        self.nrt_sample_pack_dict.register_sample(resolved.clone()).unwrap();
+
                         let sample = self.sample_pack_dict.register_sample(resolved)
                             .unwrap();
 
@@ -115,12 +137,16 @@ impl Interpreter {
                     },
                     "/clear_nrt" => {
                         self.nrt_preloads.clear();
+                        self.nrt_synthdef_snippets = vec![self.sampler_synth_snippet.clone()];
+                        self.nrt_sample_pack_dict = SamplePackDict::new();
                     },
                     "/create_synthdef" => {
                         // save scd in state, run scd in sclang
                         let definition = osc_message.get_string_at(0, "Synthdef scd string").unwrap();
                         
-                        // TODO: Probably used for NRT and perhaps possible to keep in some struct here instead
+                        if !self.nrt_synthdef_snippets.contains(&definition) {
+                            self.nrt_synthdef_snippets.push(definition.clone());                        
+                        }
 
                         if !self.synthef_snippets.contains(&definition) {
                             self.synthef_snippets.push(definition.clone());
@@ -154,13 +180,13 @@ impl Interpreter {
                                         Ok(nrt_record_msg) => {
                         
                                             // Begin building the score rows with the sythdef creation strings
-                                            let mut score_rows: Vec<String> = self.synthef_snippets.iter()
+                                            let mut score_rows: Vec<String> = self.nrt_synthdef_snippets.iter()
                                                 .map(|def| def.clone() + ".asBytes")
                                                 .map(|def| { return scd_templating::nrt_wrap_synthdef(&def); })
                                                 .collect();
                         
                                             // Add the buffer reads for samples to the score
-                                            for sample in self.sample_pack_dict.get_all_samples() {
+                                            for sample in self.nrt_sample_pack_dict.get_all_samples() {
                                                 score_rows.push(sample.get_nrt_scd_row());
                                             }
                         
@@ -168,7 +194,7 @@ impl Interpreter {
                                             // Collect messages to be played as score rows along a timeline
                                             // TODO: Legacy internal osc conversion, but works for now and is a mess to clean up 
                                             let reg_handle = Arc::new(Mutex::new(NodeIDRegistry::new()));
-                                            let dict_clone = self.sample_pack_dict.clone();
+                                            let dict_clone = self.nrt_sample_pack_dict.clone();
                                             let sample_pack_dict_arc = Arc::new(Mutex::new(dict_clone));
                                             let mut current_beat = BigDecimal::from_str("0.0").unwrap();
 
@@ -256,7 +282,7 @@ impl Interpreter {
     }
 }
 
-pub fn run(host_url: String, client: SCClient, sample_pack_dict: SamplePackDict, synthdef_snippets: Vec<String>) {
+pub fn run(host_url: String, client: SCClient, sampler_snippet: String) {
     let addr = match SocketAddrV4::from_str(&host_url) {
         Ok(addr) => addr,
         Err(e) => panic!("{}", e),
@@ -266,14 +292,7 @@ pub fn run(host_url: String, client: SCClient, sample_pack_dict: SamplePackDict,
 
     let mut buf = [0u8; 333072];
 
-    let mut interpreter = Interpreter {
-        client,
-        reg: NodeIDRegistry::new(),
-        sample_pack_dict: sample_pack_dict,
-        synthef_snippets: synthdef_snippets,
-        nrt_preloads: vec![],
-        bpm: 120
-    };
+    let mut interpreter = Interpreter::new(client, sampler_snippet);
 
     loop {
         //let buf = [0u8; rosc::decoder::MTU];
