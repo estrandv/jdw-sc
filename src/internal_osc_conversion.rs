@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use bigdecimal::{BigDecimal, FromPrimitive};
 use jdw_osc_lib::model::TimedOSCPacket;
-use log::warn;
+use log::{info, warn};
 use rosc::{OscMessage, OscPacket, OscType};
 use crate::node_lookup::NodeIDRegistry;
 use crate::osc_model::{NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, PlaySampleMessage};
@@ -78,7 +78,7 @@ impl SuperColliderMessage for NoteOnTimedMessage {
 // TODO: Util lib 
 
 fn seconds_from_beats(bpm: i32, beats: BigDecimal) -> BigDecimal {
-    let beats_per_second = BigDecimal::from_i64(60).unwrap() / BigDecimal::from_i32(bpm).unwrap();
+    let beats_per_second = BigDecimal::from_i32(bpm).unwrap() / BigDecimal::from_i64(60).unwrap();
     return beats / beats_per_second; 
 }
 
@@ -98,6 +98,9 @@ impl NoteOnTimedMessage {
         // Calculate time of off-message as seconds-from-beats
 
         let seconds = seconds_from_beats(bpm, self.gate_time.clone());
+        //let seconds = self.gate_time.clone(); // TODO: Temporarily testing unconverted  
+        info!("Sustain time was {}sec", seconds.clone());
+
         let off_message = TimedOSCPacket {time: seconds, packet: off_packet };
 
         vec![on_message, off_message]
