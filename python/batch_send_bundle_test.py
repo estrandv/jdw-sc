@@ -8,14 +8,14 @@ import time
 # Hardcoded default port of jdw-sc main application
 client = udp_client.SimpleUDPClient("127.0.0.1", 13331) # Straight to main application
 
-# Create a synthdef to use 
+# Create a synthdef to use
 with open("synths/example.scd", "r") as synthdef:
     client.send_message("/create_synthdef", synthdef.read())
 
-# Load a sample 
+# Load a sample
 import os
 wav_file = os.path.dirname(os.path.realpath(__file__)) + "/wav/snare.wav"
-client.send_message("/load_sample", [wav_file, "testsamples", 100, "bd"])
+client.send_message("/load_sample", [wav_file, "testsamples", 100, "bd", 47])
 
 bundle = osc_bundle_builder.OscBundleBuilder(osc_bundle_builder.IMMEDIATELY)
 

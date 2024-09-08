@@ -20,10 +20,10 @@ msg2.add_arg("myfile.wav")
 msg2.add_arg(6.0) # A smarter program would adjust this according to timed messages added (end beat)
 bundle.add_content(msg2.build())
 
-# Ensure a synth and sample pack 
+# Ensure a synth and sample pack
 import os
 wav_file = os.path.dirname(os.path.realpath(__file__)) + "/wav/snare.wav"
-client.send_message("/load_sample", [wav_file, "example", 100, "bd"])
+client.send_message("/load_sample", [wav_file, "example", 100, "", 0])
 with open("synths/example.scd", "r") as synthdef:
     client.send_message("/create_synthdef", synthdef.read())
 
@@ -51,7 +51,7 @@ def make_note(time, args):
 
 def make_drum(time):
     # NOTE: Since we have no built-in sample packs, this will only work if you have an example pack in /home
-    args = ["nsam_id", "example", 0, "sn", 0, "amp", 1.0, "ofs", 0.0]
+    args = ["nsam_id", "example", 0, "", 0, "amp", 1.0, "ofs", 0.0]
     note_msg = osc_message_builder.OscMessageBuilder(address="/play_sample")
     for arg in args:
         note_msg.add_arg(arg)

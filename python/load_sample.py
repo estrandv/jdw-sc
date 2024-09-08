@@ -7,7 +7,7 @@ wav_file = os.path.dirname(os.path.realpath(__file__)) + "/wav/snare.wav"
 client = udp_client.SimpleUDPClient("127.0.0.1", 13331) # Straight to main application
 
 # Or whatever your path is on this particular day ....
-client.send_message("/load_sample", [wav_file, "testsamples", 100, "bd"])
+client.send_message("/load_sample", [wav_file, "testsamples", 100, "bd", 0])
 
 time.sleep(0.5)
 

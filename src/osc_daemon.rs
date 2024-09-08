@@ -4,7 +4,7 @@ use std::{
 
 use bigdecimal::BigDecimal;
 use jdw_osc_lib::model::{OscArgHandler, TaggedBundle};
-use log::{error, warn};
+use log::{error, info, warn};
 use rosc::{OscMessage, OscPacket, OscType};
 
 use crate::{internal_osc_conversion::{self, SuperColliderNewMessage}, node_lookup::NodeIDRegistry, nrt_record::NRTConvert, osc_model::{LoadSampleMessage, NRTRecordMessage, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, PlaySampleMessage}, sampling::{Sample, SamplePackDict}, sc_process_management::SCClient, scd_templating::{self, create_nrt_script}};
@@ -84,28 +84,34 @@ impl Interpreter {
                         );
                     },
                     "/play_sample" => {
-                        let processed_message = PlaySampleMessage::new(&osc_message).unwrap();
-                        let delay = processed_message.delay_ms;
-                        let category = processed_message.category.clone().unwrap_or("".to_string());
-                        let buffer_number = self.sample_pack_dict.find(
-                            &processed_message.sample_pack,
-                            processed_message.index,
-                            &category,
-                        ).map(|sample| sample.buffer_number).unwrap_or(0);
-                        // TODO: Error handle missing sample
-            
-                        let internal_msg = processed_message.prepare(
-                            buffer_number
-                        );
 
-                        let node_id = self.reg.create_node_id(&internal_msg.external_id);
+                        if let Ok(processed_message) = PlaySampleMessage::new(&osc_message) {
+                            let delay = processed_message.delay_ms;
+                            let category = processed_message.category.clone().unwrap_or("".to_string());
+                            let buffer_number_try = self.sample_pack_dict.find(
+                                &processed_message.sample_pack,
+                                processed_message.index,
+                                &category,
+                            ).map(|sample| sample.buffer_number);
 
-                        // TODO: Adapt new osc conversion properly when everything is converted
-                        self.client.send_timed_packets(
-                            delay,
-                            internal_msg.create_osc(node_id),
-                        );
-            
+                            if let Some(buffer_number) = buffer_number_try {
+                                let internal_msg = processed_message.prepare(
+                                    buffer_number
+                                );
+        
+                                let node_id = self.reg.create_node_id(&internal_msg.external_id);
+        
+                                // TODO: Adapt new osc conversion properly when everything is converted
+                                self.client.send_timed_packets(
+                                    delay,
+                                    internal_msg.create_osc(node_id),
+                                );
+                            } else {
+                                warn!("Could not map suggested sample index to a loaded sample: {}.", processed_message.index);
+                            }
+
+                        }
+        
                     },
                     "/note_modify" => {
                         let processed_message = NoteModifyMessage::new(&osc_message).unwrap();
@@ -127,6 +133,8 @@ impl Interpreter {
 
                         let sample = self.sample_pack_dict.register_sample(resolved)
                             .unwrap();
+
+                        info!("Sample registered with tone index {}", sample.tone_index);
 
                         self.client.send_to_client(OscMessage {
                             addr: "/read_scd".to_string(),

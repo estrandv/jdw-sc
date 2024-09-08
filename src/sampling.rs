@@ -8,6 +8,7 @@ pub struct Sample {
     pub file_path: String,
     pub buffer_number: i32,
     pub category_tag: String,
+    pub tone_index: i32,
 }
 
 #[derive(Clone)]
@@ -48,24 +49,17 @@ impl SamplePack {
         &self,
         sample_number: usize,
         category: &str
-    ) -> Sample {
-        let pack_max_index = self.samples.len();
-        let index = sample_number % pack_max_index;
+    ) -> Option<Sample> {
 
-        return if !category.is_empty() {
-            let samples_in_category: Vec<Sample> = self.samples.iter()
-                .filter(|sample| sample.category_tag == category)
-                .map(|sample| sample.clone())
-                .collect();
+        let samples_in_category: Vec<Sample> = self.samples.iter()
+            // Return ALL samples if category is blank
+            .filter(|sample| sample.category_tag == category || category == "")
+            .map(|f| f.clone())
+            .collect();
 
-            if !samples_in_category.is_empty() {
-                samples_in_category.get(sample_number % samples_in_category.len()).unwrap().clone()
-            } else {
-                self.samples.get(index).unwrap().clone()
-            }
-        } else {
-            self.samples.get(index).unwrap().clone()
-        }
+        return samples_in_category.iter()
+            .find(|sample| sample.tone_index as usize == sample_number)
+            .map(|sample| sample.clone());
 
     }
 }
@@ -79,6 +73,7 @@ impl SamplePackDict {
 
     pub fn register_sample(&mut self, msg: LoadSampleMessage) -> Result<Sample, String> {
 
+
         let present = self.sample_packs.contains_key(&msg.sample_pack);
 
         if !present {
@@ -88,20 +83,26 @@ impl SamplePackDict {
         }
 
         let pack = self.sample_packs.get_mut(&msg.sample_pack).unwrap();
+
+        // Remove existing samples with the same tone index (overwrite)
+        pack.samples.retain(|sample| sample.tone_index != msg.tone_index);
+
         let existing = pack.samples.iter().find(|s| s.file_path == msg.file_path).map(|s| s.clone());
 
-        // TODO: Might be a good idea to fail if present, or rewrite the buffer number completely 
+
+        // TODO: Might be a good idea to fail if present, or rewrite the buffer number completely
         let sample = Sample {
             file_path: msg.file_path.to_string(),
             buffer_number: msg.buffer_number,
             category_tag: msg.category_tag.to_string(),
+            tone_index: msg.tone_index,
         };
 
         if !existing.is_some() {
             pack.samples.push(sample.clone());
         }
 
-        let selected = if existing.is_some() {existing.unwrap()} else {sample}; 
+        let selected = if existing.is_some() {existing.unwrap()} else {sample};
 
         // TODO: Some more error handling is probably a good idea, like for duplicate buffer numbers
         // TODO: ref of sample might be enough of a return
@@ -115,7 +116,7 @@ impl SamplePackDict {
         category: &str
     ) -> Option<Sample> {
 
-        self.sample_packs.get(sample_pack).map(|pack| pack.find(sample_number, category))
+        self.sample_packs.get(sample_pack).and_then(|pack| pack.find(sample_number, category))
     }
 
     pub fn get_all_samples(&self) -> Vec<Sample> {

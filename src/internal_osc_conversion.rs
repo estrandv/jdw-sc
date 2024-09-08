@@ -250,16 +250,23 @@ pub fn resolve_msg(packet: OscPacket, dict: Arc<Mutex<SamplePackDict>>) -> Optio
                 .unwrap()))
         }
         "/play_sample" => {
-            Some(Box::new(PlaySampleMessage::new(&msg.clone()).map(|play_sample| {
-                let cat = play_sample.category.clone().unwrap_or("".to_string());
-                let buf = dict.lock().unwrap().find(
-                    &play_sample.sample_pack.to_string(),
-                    play_sample.index,
-                    &cat
-                ).map(|sample| sample.buffer_number).unwrap_or(0);
-                // TODO: warn on missing sample
-                play_sample.prepare(buf)
-            }).unwrap()))
+            // TODO: Wrangled this a bit, does
+            return PlaySampleMessage::new(&msg.clone())
+                .map(|play_sample| {
+                    let cat = play_sample.category.clone().unwrap_or("".to_string());
+
+                    return dict.lock().unwrap().find(
+                        &play_sample.sample_pack.to_string(),
+                        play_sample.index,
+                        &cat
+                    ).map(|sample| {
+                        let res: Box<dyn SuperColliderMessage> = Box::new(play_sample.prepare(sample.buffer_number));
+                        return res;
+                    });
+                    // TODO: warn on missing sample
+
+                })
+                .unwrap_or(Option::None);
         }
         "/note_on" => {
             Some(Box::new(NoteOnMessage::new(&msg.clone())

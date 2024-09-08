@@ -1,8 +1,6 @@
-
 /*
-    OSC structs for careful parsing and management of expected message and bundle types.
- */
-
+   OSC structs for careful parsing and management of expected message and bundle types.
+*/
 
 use bigdecimal::BigDecimal;
 use jdw_osc_lib::model::{OscArgHandler, TaggedBundle, TimedOSCPacket};
@@ -12,18 +10,15 @@ use rosc::{OscMessage, OscPacket, OscType};
 // Initial structure below: (Note that we might want to expose other s_new args eventually)
 // ["/note_on_timed", "my_synth", "kb_my_synth_n33", 0.2, "arg1", 0.2, "arg2", 0.4, ...]
 pub struct NoteOnTimedMessage {
-    pub synth_name: String, // The synth upon which to play the note.
+    pub synth_name: String,  // The synth upon which to play the note.
     pub external_id: String, // Identifier for note to allow later modification.
     pub gate_time: BigDecimal,
     pub delay_ms: u64,
-    pub args: Vec<OscType> // Named args such as "bus" or "rel"
+    pub args: Vec<OscType>, // Named args such as "bus" or "rel"
 }
 
-
 impl NoteOnTimedMessage {
-
     pub fn new(msg: &OscMessage) -> Result<NoteOnTimedMessage, String> {
-
         msg.expect_addr("/note_on_timed")?;
         msg.expect_args(4)?;
 
@@ -41,7 +36,6 @@ impl NoteOnTimedMessage {
             args: named_args,
         })
     }
-
 }
 
 #[derive(Clone)]
@@ -50,34 +44,35 @@ pub struct LoadSampleMessage {
     pub sample_pack: String,
     pub buffer_number: i32,
     pub category_tag: String,
+    pub tone_index: i32,
 }
 
 impl LoadSampleMessage {
     pub fn new(msg: &OscMessage) -> Result<LoadSampleMessage, String> {
         msg.expect_addr("/load_sample")?;
-        msg.expect_args(4)?;
+        msg.expect_args(5)?;
 
         Ok(LoadSampleMessage {
             file_path: msg.get_string_at(0, "file_path")?,
             sample_pack: msg.get_string_at(1, "sample_pack")?,
             buffer_number: msg.get_int_at(2, "buffer_number")?,
             category_tag: msg.get_string_at(3, "category_tag")?,
+            tone_index: msg.get_int_at(4, "tone_index")?,
         })
-
     }
 }
 
 // ProscNoteCreateMessage
 // Non-timed regular s_new with external_id for later modifications
 pub struct NoteOnMessage {
-    pub synth_name: String, // The synth upon which to play the note.
+    pub synth_name: String,  // The synth upon which to play the note.
     pub external_id: String, // Identifier for note to allow later modification.
     pub delay_ms: u64,
     pub args: Vec<OscType>, // Named args such as "bus" or "rel"
 }
 
 impl NoteOnMessage {
-    pub fn new (msg: &OscMessage) -> Result<NoteOnMessage, String> {
+    pub fn new(msg: &OscMessage) -> Result<NoteOnMessage, String> {
         msg.expect_addr("/note_on")?;
         msg.expect_args(3)?;
 
@@ -90,7 +85,7 @@ impl NoteOnMessage {
             synth_name,
             external_id,
             delay_ms,
-            args: named_args
+            args: named_args,
         })
     }
 }
@@ -106,7 +101,6 @@ pub struct NoteModifyMessage {
 
 impl NoteModifyMessage {
     pub fn new(message: &OscMessage) -> Result<NoteModifyMessage, String> {
-
         message.expect_addr("/note_modify")?;
         message.expect_args(2)?;
 
@@ -117,18 +111,16 @@ impl NoteModifyMessage {
         Ok(NoteModifyMessage {
             external_id_regex,
             delay_ms,
-            args
+            args,
         })
-
     }
-
 }
 
 // Example below of args in order with "" as category (= Empty)
 // ["/play_sample", "my_unique_id", "example", 2, "", "arg1", 0.2, "arg2", 0.4, ...]
 pub struct PlaySampleMessage {
     pub external_id: String,
-    pub sample_pack: String, // The parent dir of the sample file
+    pub sample_pack: String,      // The parent dir of the sample file
     pub index: usize, // Sample number - either as plain order in dir or in a given category
     pub category: Option<String>, // TODO: Arbitrary string codes... is there a better way?
     pub delay_ms: u64,
@@ -137,7 +129,6 @@ pub struct PlaySampleMessage {
 
 impl PlaySampleMessage {
     pub fn new(message: &OscMessage) -> Result<PlaySampleMessage, String> {
-
         message.expect_addr("/play_sample")?;
         message.expect_args(5)?;
 
@@ -152,7 +143,11 @@ impl PlaySampleMessage {
             return Err("Index arg in sample message incompatible: negative".to_string());
         }
 
-        let category = if cat_arg == "".to_string() {None} else {Some(cat_arg)};
+        let category = if cat_arg == "".to_string() {
+            None
+        } else {
+            Some(cat_arg)
+        };
 
         Ok(PlaySampleMessage {
             external_id,
@@ -160,49 +155,57 @@ impl PlaySampleMessage {
             index: index as usize,
             category,
             delay_ms,
-            args
+            args,
         })
-
     }
-
-
 }
 
 /*
-    Extracted from a bundle:
-    [/bundle_info, "nrt_record"]
-    [/nrt_record_info, <bpm: 120.0>, <file_name: "myfile.wav">, <end_beat: 44.0>]
-    followed by untagged bundle: all contained timed messages
- */
+   Extracted from a bundle:
+   [/bundle_info, "nrt_record"]
+   [/nrt_record_info, <bpm: 120.0>, <file_name: "myfile.wav">, <end_beat: 44.0>]
+   followed by untagged bundle: all contained timed messages
+*/
 pub struct NRTRecordMessage {
     pub file_name: String,
     pub bpm: f32,
     pub messages: Vec<TimedOSCPacket>,
-    pub end_beat: f32
+    pub end_beat: f32,
 }
 
 impl NRTRecordMessage {
-    pub fn from_bundle(bundle: TaggedBundle) -> Result<NRTRecordMessage, String>{
+    pub fn from_bundle(bundle: TaggedBundle) -> Result<NRTRecordMessage, String> {
         if &bundle.bundle_tag != "nrt_record" {
-            return Err(format!("Attempted to parse {} as nrt_record bundle", &bundle.bundle_tag));
+            return Err(format!(
+                "Attempted to parse {} as nrt_record bundle",
+                &bundle.bundle_tag
+            ));
         }
 
         let info_msg = bundle.get_message(0)?;
         let message_bundle = bundle.get_bundle(1)?;
 
-        info!("Began parsing an nrt_record bundle with content size: {}", message_bundle.content.len());
+        info!(
+            "Began parsing an nrt_record bundle with content size: {}",
+            message_bundle.content.len()
+        );
 
-        let timed_messages: Vec<_> = message_bundle.content.iter()
-            .map(|packet| return match packet {
-                OscPacket::Bundle(bun) => {
-                    let tagged = TaggedBundle::new(&bun)?;
-                    info!("Parsing tagged bundle for NRT! {}", tagged.bundle_tag);
-                    Ok(TimedOSCPacket::from_bundle(tagged)?)
-                }
-                _ => {
-                    warn!("Unexpected non-bundle when unpacking timed messages bundle content");
-                    Err("Unexpected non-bundle when unpacking timed messages bundle".to_string())
-                }
+        let timed_messages: Vec<_> = message_bundle
+            .content
+            .iter()
+            .map(|packet| {
+                return match packet {
+                    OscPacket::Bundle(bun) => {
+                        let tagged = TaggedBundle::new(&bun)?;
+                        info!("Parsing tagged bundle for NRT! {}", tagged.bundle_tag);
+                        Ok(TimedOSCPacket::from_bundle(tagged)?)
+                    }
+                    _ => {
+                        warn!("Unexpected non-bundle when unpacking timed messages bundle content");
+                        Err("Unexpected non-bundle when unpacking timed messages bundle"
+                            .to_string())
+                    }
+                };
             })
             .map(|m| m.unwrap())
             .collect();
@@ -218,8 +221,7 @@ impl NRTRecordMessage {
             file_name,
             bpm,
             messages: timed_messages,
-            end_beat
+            end_beat,
         })
-
     }
 }

@@ -8,7 +8,7 @@ wav_file = os.path.dirname(os.path.realpath(__file__)) + "/wav/snare.wav"
 client = udp_client.SimpleUDPClient("127.0.0.1", 13331) # Straight to main application
 
 # Ensure at least one sample exists
-client.send_message("/load_sample", [wav_file, "testsamples", 100, "bd"])
+client.send_message("/load_sample", [wav_file, "testsamples", 100, "", 0])
 
 def play(index, category, args):
     client.send_message("/play_sample", [
@@ -22,19 +22,20 @@ def play(index, category, args):
 step = 0.4
 short = step / 2
 
-play(0, "bd", ["amp", 2.5])
+# TODO: Since we don't really use different samples for the test the categories don't do much
+play(0, "", ["amp", 2.5])
 time.sleep(step)
-play(0, "sn", ["ofs", 0.13, "amp", 1.5])
+play(0, "", ["ofs", 0.13, "amp", 1.5])
 time.sleep(step)
-play(0, "bd", ["amp", 2.5])
+play(0, "", ["amp", 2.5])
 time.sleep(short)
-play(0, "bd", ["amp", 0.8, "ofs", 0.05])
+play(0, "", ["amp", 0.8, "ofs", 0.05])
 time.sleep(short)
-play(0, "to", ["amp", 2.5])
-play(0, "sn", ["ofs", 0.13])
+play(0, "", ["amp", 2.5])
+play(0, "", ["ofs", 0.13])
 time.sleep(short)
-play(0, "sn", ["ofs", 0.13])
+play(0, "", ["ofs", 0.13])
 time.sleep(short / 2)
-play(0, "sn", ["ofs", 0.13])
+play(0, "", ["ofs", 0.13])
 time.sleep(short / 2)
-play(0, "cy", ["ofs", 0.03, "sus", 2.0, "amp", 0.3])
+play(0, "", ["ofs", 0.03, "sus", 2.0, "amp", 0.3])
