@@ -4,22 +4,23 @@ use std::{
     net::{SocketAddrV4, UdpSocket},
     str::FromStr,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use bigdecimal::BigDecimal;
 use jdw_osc_lib::model::{OscArgHandler, TaggedBundle, TimedOSCPacket};
 use log::{error, info, warn};
-use rosc::{OscBundle, OscMessage, OscPacket, OscType};
+use rosc::{OscMessage, OscPacket, OscType};
 
 use crate::{
-    internal_osc_conversion::{self, SuperColliderNewMessage},
+    internal_osc_conversion::{self},
     node_lookup::NodeIDRegistry,
     nrt_record::NRTConvert,
     osc_model::{
         LoadSampleMessage, NRTRecordMessage, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage,
         PlaySampleMessage,
     },
-    sampling::{Sample, SamplePackDict},
+    sampling::SamplePackDict,
     sc_process_management::SCClient,
     scd_templating::{self, create_nrt_script},
 };
@@ -67,7 +68,7 @@ impl Interpreter {
                         for node_id in node_ids {
                             let arg = OscType::Int(node_id);
 
-                            self.client.send_with_delay(
+                            self.client.send_to_scsynth_with_delay(
                                 OscPacket::Message(OscMessage {
                                     addr: "/n_free".to_string(),
                                     args: vec![arg],
@@ -82,7 +83,7 @@ impl Interpreter {
                     "/note_on_timed" => {
                         let processed_message = NoteOnTimedMessage::new(&osc_message).unwrap();
                         let node_id = self.reg.create_node_id(&processed_message.external_id);
-                        self.client.send_timed_packets(
+                        self.client.send_timed_packets_to_scsynth(
                             processed_message.delay_ms,
                             processed_message.create_osc(node_id, self.bpm),
                         );
@@ -90,7 +91,7 @@ impl Interpreter {
                     "/note_on" => {
                         let processed_message = NoteOnMessage::new(&osc_message).unwrap();
                         let node_id = self.reg.create_node_id(&processed_message.external_id);
-                        self.client.send_timed_packets(
+                        self.client.send_timed_packets_to_scsynth(
                             processed_message.delay_ms,
                             processed_message.create_osc(node_id),
                         );
@@ -115,8 +116,10 @@ impl Interpreter {
                                 let node_id = self.reg.create_node_id(&internal_msg.external_id);
 
                                 // TODO: Adapt new osc conversion properly when everything is converted
-                                self.client
-                                    .send_timed_packets(delay, internal_msg.create_osc(node_id));
+                                self.client.send_timed_packets_to_scsynth(
+                                    delay,
+                                    internal_msg.create_osc(node_id),
+                                );
                             } else {
                                 warn!(
                                     "Could not map suggested sample index to a loaded sample: {}.",
@@ -132,13 +135,13 @@ impl Interpreter {
                             .reg
                             .regex_search_node_ids(&processed_message.external_id_regex);
 
-                        self.client.send_timed_packets(
+                        self.client.send_timed_packets_to_scsynth(
                             processed_message.delay_ms,
                             processed_message.create_osc(node_ids),
                         );
                     }
                     "/read_scd" => {
-                        self.client.send_to_client(osc_message);
+                        self.client.send_to_sclang(osc_message);
                     }
                     "/load_sample" => {
                         let resolved = LoadSampleMessage::new(&osc_message).unwrap();
@@ -151,7 +154,7 @@ impl Interpreter {
 
                         info!("Sample registered with tone index {}", sample.tone_index);
 
-                        self.client.send_to_client(OscMessage {
+                        self.client.send_to_sclang(OscMessage {
                             addr: "/read_scd".to_string(),
                             args: vec![OscType::String(sample.get_buffer_load_scd())],
                         });
@@ -174,7 +177,7 @@ impl Interpreter {
                             self.synthef_snippets.push(definition.clone());
 
                             let add_call = definition + ".add;";
-                            self.client.send_to_client(OscMessage {
+                            self.client.send_to_sclang(OscMessage {
                                 addr: "/read_scd".to_string(),
                                 args: vec![OscType::String(add_call)],
                             });
@@ -299,15 +302,52 @@ impl Interpreter {
                                             )
                                             .unwrap();
                                             file.write_all(script.as_bytes()).unwrap();
+
                                             println!(
                                                 "Saved NRT script as: {}",
-                                                nrt_record_msg.file_name
+                                                &nrt_record_msg.file_name
                                             );
 
-                                            self.client.send_to_client(OscMessage {
+                                            self.client.send_to_sclang(OscMessage {
                                                 addr: "/read_scd".to_string(),
                                                 args: vec![OscType::String(script)],
                                             });
+
+                                            info!("Awaiting NRT response!");
+                                            match self.client.await_internal_response(
+                                                "/nrt_done",
+                                                vec![OscType::String("ok".to_string())],
+                                                Duration::from_secs(10),
+                                            ) {
+                                                Err(e) => {
+                                                    error!("Timed out waiting for NRT done {}", e);
+                                                    self.client.send_out(OscMessage {
+                                                        addr: "/nrt_record_finished".to_string(),
+                                                        args: vec![
+                                                            OscType::String("FAILURE".to_string()),
+                                                            OscType::String(
+                                                                nrt_record_msg
+                                                                    .file_name
+                                                                    .to_string(),
+                                                            ),
+                                                        ],
+                                                    })
+                                                }
+                                                Ok(()) => {
+                                                    info!("NRT finished.");
+                                                    self.client.send_out(OscMessage {
+                                                        addr: "/nrt_record_finished".to_string(),
+                                                        args: vec![
+                                                            OscType::String("SUCCESS".to_string()),
+                                                            OscType::String(
+                                                                nrt_record_msg
+                                                                    .file_name
+                                                                    .to_string(),
+                                                            ),
+                                                        ],
+                                                    });
+                                                }
+                                            };
 
                                             // TODO: Do something with the /nrt_done message
                                         }
