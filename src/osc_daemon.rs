@@ -296,7 +296,6 @@ impl Interpreter {
                                                 score_rows,
                                             );
 
-                                            // TODO: DEBUG STUFF
                                             let mut file = File::create(
                                                 &(nrt_record_msg.file_name.clone() + ".scd"),
                                             )
@@ -308,12 +307,21 @@ impl Interpreter {
                                                 &nrt_record_msg.file_name
                                             );
 
+                                            /*
+                                                NRT scripts are generally too large to send as an osc message,
+                                                better to force sclang to interpret the file.
+                                            */
                                             self.client.send_to_sclang(OscMessage {
-                                                addr: "/read_scd".to_string(),
-                                                args: vec![OscType::String(script)],
+                                                addr: "/read_scd_file".to_string(),
+                                                args: vec![OscType::String(
+                                                    nrt_record_msg.file_name.to_string() + ".scd",
+                                                )],
                                             });
 
                                             info!("Awaiting NRT response!");
+
+                                            // TODO: No need for this to be synchronous, really, as it blocks everything else
+                                            // It's a bit tricky to make a callback that can borrow the client for response sending though
                                             match self.client.await_internal_response(
                                                 "/nrt_done",
                                                 vec![OscType::String("ok".to_string())],
@@ -348,8 +356,6 @@ impl Interpreter {
                                                     });
                                                 }
                                             };
-
-                                            // TODO: Do something with the /nrt_done message
                                         }
                                         Err(e) => {
                                             error!("Failed to parse NRT record message: {}", e);

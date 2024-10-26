@@ -34,11 +34,22 @@ s.waitForBoot({
         '/read_scd'
     );
 
-	//"Ready!".postln;
+    /*
+        Custom function for reading scd strings from files.
+        Useful when /read_scd can't handle the size of the scd string you want to send.
+    */
+    OSCFunc({
+        arg msg, time, addr, port;
+        var file;
+        file = File.open(msg[1].asString, "r");
+    	"Reading scd file: " + msg[1].postln;
+        file.readAllString().interpret();
+        file.close();
+    }, '/read_scd_file');
+
 
 	/*
 	    Custom message sent on startup completion to let the wrapper know that all custom logic is ready
 	*/
 	o.sendMsg("/init", "ok");
 });
-
