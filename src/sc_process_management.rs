@@ -128,11 +128,11 @@ impl SCClient {
         // TODO: Trying out some latency adjustments to fix desync issues
         // This is not the optimal way - these operations are highly reliant on context
 
-        let now = SystemTime::now() + Duration::from_millis(delay_ms);
+        let target_time = SystemTime::now() + Duration::from_millis(delay_ms);
 
         use std::convert::TryFrom;
         let bundle = OscBundle {
-            timetag: OscTime::try_from(now).unwrap(),
+            timetag: OscTime::try_from(target_time).unwrap(),
             content: vec![msg],
         };
 

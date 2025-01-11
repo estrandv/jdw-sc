@@ -1,16 +1,17 @@
 use std::{
+    convert::{TryFrom, TryInto},
     fs::File,
     io::Write,
     net::{SocketAddrV4, UdpSocket},
     str::FromStr,
     sync::{Arc, Mutex},
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 
 use bigdecimal::BigDecimal;
 use jdw_osc_lib::model::{OscArgHandler, TaggedBundle, TimedOSCPacket};
 use log::{error, info, warn};
-use rosc::{OscMessage, OscPacket, OscType};
+use rosc::{OscMessage, OscPacket, OscTime, OscType};
 
 use crate::{
     internal_osc_conversion::{self},
@@ -76,6 +77,22 @@ impl Interpreter {
                                 0,
                             );
                         }
+                    }
+                    /*
+                        Respond to router with an event message containing the timestamp at which
+                        it would have been executed, were it a jdw-sc note with the same delay.
+                        TODO: Somewhat out of scope, could be its own little service.
+                    */
+                    "/jdw_sc_event_trigger" => {
+                        let msg = osc_message.get_string_at(0, "message").unwrap();
+                        let delay_ms = osc_message.get_u64_at(1, "delay_ms").unwrap();
+                        let target_time = SystemTime::now() + Duration::from_millis(delay_ms);
+                        let osc_time = OscTime::try_from(target_time).unwrap();
+
+                        self.client.send_out(OscMessage {
+                            addr: "/jdw_sc_event".to_string(),
+                            args: vec![OscType::String(msg), OscType::Time(osc_time)],
+                        });
                     }
                     "/set_bpm" => {
                         self.bpm = osc_message.get_int_at(0, "BPM value").unwrap();
