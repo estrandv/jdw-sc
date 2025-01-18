@@ -91,7 +91,7 @@ fn main() {
             addr: "/note_on_timed".to_string(),
             args: vec![
                 OscType::String("default".to_string()),
-                OscType::String("launch_ping".to_string()),
+                OscType::String("launch_ping_{nodeId}".to_string()),
                 OscType::String("0.125".to_string()),
                 OscType::Int(0),
                 OscType::String("freq".to_string()),

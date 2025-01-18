@@ -23,17 +23,23 @@ impl NodeIDRegistry {
     }
 
     // Assign and return a new unique node_id for the given external_id
-    pub fn create_node_id(&self, external_id: &str) -> i32 {
+    pub fn create_node_id(&self, external_id: &str) -> Result<i32, String> {
         let mut node_id = self.curr_id.clone().into_inner();
         node_id += 1;
-
-        let mut new_reg = self.registry.clone().into_inner();
-        new_reg.insert(external_id.to_string(), node_id);
-        self.registry.replace(new_reg);
-
         self.curr_id.replace(node_id);
 
-        node_id
+        let with_id_fill = external_id.replace("{nodeId}", &format!("{}", node_id));
+
+        let mut new_reg = self.registry.clone().into_inner();
+
+        if !self.regex_search_node_ids(&with_id_fill).is_empty() {
+            return Result::Err("External id already taken".to_string());
+        }
+
+        new_reg.insert(with_id_fill.to_string(), node_id);
+        self.registry.replace(new_reg);
+
+        Result::Ok(node_id)
     }
 
     // Clear all node_ids matching regex

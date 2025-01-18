@@ -57,24 +57,28 @@ fn create_s_new(node_id: i32, synth_name: &str, msg_args: &Vec<OscType>) -> Time
 
 impl SuperColliderMessage for NoteOnTimedMessage {
     fn as_osc(&self, reg: Arc<Mutex<NodeIDRegistry>>) -> Vec<TimedOSCPacket> {
-        let node_id = reg.lock().unwrap().create_node_id(&self.external_id);
-        let on_message = create_s_new(node_id, &self.synth_name, &self.args);
+        return match reg.lock().unwrap().create_node_id(&self.external_id) {
+            Ok(node_id) => {
+                let on_message = create_s_new(node_id, &self.synth_name, &self.args);
 
-        let off_packet = OscPacket::Message(OscMessage {
-            addr: "/n_set".to_string(),
-            args: vec![
-                OscType::Int(node_id),               // NodeID
-                OscType::String("gate".to_string()), // gate=0 is note off
-                OscType::Float(0.0),
-            ],
-        });
+                let off_packet = OscPacket::Message(OscMessage {
+                    addr: "/n_set".to_string(),
+                    args: vec![
+                        OscType::Int(node_id),               // NodeID
+                        OscType::String("gate".to_string()), // gate=0 is note off
+                        OscType::Float(0.0),
+                    ],
+                });
 
-        let off_message = TimedOSCPacket {
-            time: self.gate_time.clone(),
-            packet: off_packet,
+                let off_message = TimedOSCPacket {
+                    time: self.gate_time.clone(),
+                    packet: off_packet,
+                };
+
+                vec![on_message, off_message]
+            }
+            Err(_) => vec![],
         };
-
-        vec![on_message, off_message]
     }
 }
 
@@ -122,10 +126,14 @@ impl NoteOnMessage {
 
 impl SuperColliderMessage for NoteOnMessage {
     fn as_osc(&self, reg: Arc<Mutex<NodeIDRegistry>>) -> Vec<TimedOSCPacket> {
-        let node_id = reg.lock().unwrap().create_node_id(&self.external_id);
-        let msg = create_s_new(node_id, &self.synth_name, &self.args);
+        return match reg.lock().unwrap().create_node_id(&self.external_id) {
+            Ok(node_id) => {
+                let msg = create_s_new(node_id, &self.synth_name, &self.args);
 
-        vec![msg]
+                vec![msg]
+            }
+            Err(_) => vec![],
+        };
     }
 }
 
@@ -216,11 +224,15 @@ impl PlaySampleMessage {
 
 impl SuperColliderMessage for PreparedPlaySampleMessage {
     fn as_osc(&self, reg: Arc<Mutex<NodeIDRegistry>>) -> Vec<TimedOSCPacket> {
-        let node_id = reg.lock().unwrap().create_node_id(&self.external_id);
-        vec![create_s_new(
-            node_id, "sampler", // The "synth" used to play buffer samples
-            &self.args,
-        )]
+        return match reg.lock().unwrap().create_node_id(&self.external_id) {
+            Ok(node_id) => {
+                vec![create_s_new(
+                    node_id, "sampler", // The "synth" used to play buffer samples
+                    &self.args,
+                )]
+            }
+            Err(_) => vec![],
+        };
     }
 }
 

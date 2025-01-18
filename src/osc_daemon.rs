@@ -101,46 +101,29 @@ impl Interpreter {
                     }
                     "/note_on_timed" => {
                         let processed_message = NoteOnTimedMessage::new(&osc_message).unwrap();
-                        if !self
-                            .reg
-                            .regex_search_node_ids(&processed_message.external_id)
-                            .is_empty()
-                        {
-                            warn!(
-                                "Attempted to create new note on with existing external id {}, ignoring...",
-                                &processed_message.external_id
-                            );
 
-                            // TODO: This lookup might be costly in execution time if we're unlucky
-                            return;
+                        match self.reg.create_node_id(&processed_message.external_id) {
+                            Ok(node_id) => {
+                                self.client.send_timed_packets_to_scsynth(
+                                    processed_message.delay_ms,
+                                    processed_message.create_osc(node_id, self.bpm),
+                                );
+                            }
+                            Err(e) => println!("Can't create nodeId: {}", e),
                         }
-                        let node_id = self.reg.create_node_id(&processed_message.external_id);
-
-                        self.client.send_timed_packets_to_scsynth(
-                            processed_message.delay_ms,
-                            processed_message.create_osc(node_id, self.bpm),
-                        );
                     }
                     "/note_on" => {
                         let processed_message = NoteOnMessage::new(&osc_message).unwrap();
-                        if !self
-                            .reg
-                            .regex_search_node_ids(&processed_message.external_id)
-                            .is_empty()
-                        {
-                            warn!(
-                                "Attempted to create new note on with existing external id {}, ignoring...",
-                                &processed_message.external_id
-                            );
 
-                            // TODO: This lookup might be costly in execution time if we're unlucky
-                            return;
+                        match self.reg.create_node_id(&processed_message.external_id) {
+                            Ok(node_id) => {
+                                self.client.send_timed_packets_to_scsynth(
+                                    processed_message.delay_ms,
+                                    processed_message.create_osc(node_id),
+                                );
+                            }
+                            Err(e) => println!("Can't create nodeId: {}", e),
                         }
-                        let node_id = self.reg.create_node_id(&processed_message.external_id);
-                        self.client.send_timed_packets_to_scsynth(
-                            processed_message.delay_ms,
-                            processed_message.create_osc(node_id),
-                        );
                     }
                     "/play_sample" => {
                         if let Ok(processed_message) = PlaySampleMessage::new(&osc_message) {
@@ -158,14 +141,16 @@ impl Interpreter {
 
                             if let Some(buffer_number) = buffer_number_try {
                                 let internal_msg = processed_message.prepare(buffer_number);
-
-                                let node_id = self.reg.create_node_id(&internal_msg.external_id);
-
-                                // TODO: Adapt new osc conversion properly when everything is converted
-                                self.client.send_timed_packets_to_scsynth(
-                                    delay,
-                                    internal_msg.create_osc(node_id),
-                                );
+                                match self.reg.create_node_id(&internal_msg.external_id) {
+                                    Ok(node_id) => {
+                                        // TODO: Adapt new osc conversion properly when everything is converted
+                                        self.client.send_timed_packets_to_scsynth(
+                                            delay,
+                                            internal_msg.create_osc(node_id),
+                                        );
+                                    }
+                                    Err(e) => println!("Can't create nodeId: {}", e),
+                                }
                             } else {
                                 warn!(
                                     "Could not map suggested sample index to a loaded sample: {}.",
