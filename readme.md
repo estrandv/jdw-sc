@@ -8,6 +8,7 @@ In order to enable more complete control over Supercollider it also provides cus
 * A custom message for loading samples for simple playback (for both realtime and NRT).
 * A node_id registry based on OSC-provided external ids, allowing e.g. changing of playing synth args without
     knowing nodeId.
+    * With the option to provide the templated "{nodeId}" parameter, which fills the external id with the current nodeId to promote unique ids
 * Functions for playing samples by name, note_on with timed note_off, streamlined NRT recording,
     and more.
 
