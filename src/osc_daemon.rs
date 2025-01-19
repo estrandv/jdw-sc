@@ -19,7 +19,7 @@ use crate::{
     nrt_record::NRTConvert,
     osc_model::{
         LoadSampleMessage, NRTRecordMessage, NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage,
-        PlaySampleMessage,
+        PlaySampleMessage, RealTimePacket,
     },
     sampling::SamplePackDict,
     sc_process_management::SCClient,
@@ -57,7 +57,7 @@ impl Interpreter {
         }
     }
 
-    fn interpret(&mut self, packet: OscPacket) {
+    fn interpret(&mut self, packet: OscPacket, sendTime: SystemTime) {
         match packet {
             OscPacket::Message(osc_message) => {
                 match osc_message.addr.as_str() {
@@ -75,6 +75,7 @@ impl Interpreter {
                                     args: vec![arg],
                                 }),
                                 0,
+                                sendTime,
                             );
 
                             self.reg.regex_clear_node_ids(&regex);
@@ -88,7 +89,7 @@ impl Interpreter {
                     "/jdw_sc_event_trigger" => {
                         let msg = osc_message.get_string_at(0, "message").unwrap();
                         let delay_ms = osc_message.get_u64_at(1, "delay_ms").unwrap();
-                        let target_time = SystemTime::now() + Duration::from_millis(delay_ms);
+                        let target_time = sendTime + Duration::from_millis(delay_ms);
                         let osc_time = OscTime::try_from(target_time).unwrap();
 
                         self.client.send_out(OscMessage {
@@ -107,6 +108,7 @@ impl Interpreter {
                                 self.client.send_timed_packets_to_scsynth(
                                     processed_message.delay_ms,
                                     processed_message.create_osc(node_id, self.bpm),
+                                    sendTime,
                                 );
                             }
                             Err(e) => println!("Can't create nodeId: {}", e),
@@ -120,6 +122,7 @@ impl Interpreter {
                                 self.client.send_timed_packets_to_scsynth(
                                     processed_message.delay_ms,
                                     processed_message.create_osc(node_id),
+                                    sendTime,
                                 );
                             }
                             Err(e) => println!("Can't create nodeId: {}", e),
@@ -147,6 +150,7 @@ impl Interpreter {
                                         self.client.send_timed_packets_to_scsynth(
                                             delay,
                                             internal_msg.create_osc(node_id),
+                                            sendTime,
                                         );
                                     }
                                     Err(e) => println!("Can't create nodeId: {}", e),
@@ -160,6 +164,8 @@ impl Interpreter {
                         }
                     }
                     "/note_modify" => {
+                        let receive_time = SystemTime::now();
+
                         let processed_message = NoteModifyMessage::new(&osc_message).unwrap();
 
                         let node_ids = self
@@ -169,6 +175,7 @@ impl Interpreter {
                         self.client.send_timed_packets_to_scsynth(
                             processed_message.delay_ms,
                             processed_message.create_osc(node_ids),
+                            receive_time,
                         );
                     }
                     "/read_scd" => {
@@ -222,10 +229,20 @@ impl Interpreter {
                     Ok(tagged_bundle) => {
                         if FUNNELED_TBUNDLES.contains(&tagged_bundle.bundle_tag.as_str()) {
                             for packet in tagged_bundle.contents {
-                                self.interpret(packet);
+                                self.interpret(packet, SystemTime::now());
                             }
                         } else {
                             match tagged_bundle.bundle_tag.as_str() {
+                                // Real time packets speicify the send time of the contained packed,
+                                // helping determine e.g. valid execution time after delay calculation more accurately
+                                "real_time_packet" => match RealTimePacket::new(tagged_bundle) {
+                                    Ok(real_time) => {
+                                        self.interpret(real_time.packet, real_time.time);
+                                    }
+                                    Err(e) => {
+                                        warn!("Malformed real_time_packet: {}", e);
+                                    }
+                                },
                                 "nrt_preload" => {
                                     tagged_bundle
                                         .contents
@@ -429,7 +446,7 @@ pub fn run(host_url: String, client: SCClient, sampler_snippet: String) {
             Ok((size, _)) => {
                 let (_rem, packet) = rosc::decoder::decode_udp(&buf[..size]).unwrap();
 
-                interpreter.interpret(packet);
+                interpreter.interpret(packet, SystemTime::now());
             }
             Err(e) => {
                 warn!("Failed to receive from socket {}", e);

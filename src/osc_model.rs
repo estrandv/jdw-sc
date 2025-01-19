@@ -2,10 +2,49 @@
    OSC structs for careful parsing and management of expected message and bundle types.
 */
 
+use std::{convert::TryFrom, time::SystemTime};
+
 use bigdecimal::BigDecimal;
 use jdw_osc_lib::model::{OscArgHandler, TaggedBundle, TimedOSCPacket};
 use log::{info, warn};
 use rosc::{OscMessage, OscPacket, OscType};
+
+pub struct RealTimePacket {
+    pub packet: OscPacket,
+    pub time: SystemTime,
+}
+
+impl RealTimePacket {
+    pub fn new(tagged_bundle: TaggedBundle) -> Result<RealTimePacket, String> {
+        let info_packet = tagged_bundle.contents.get(0).ok_or("No packets")?;
+        let actual_packet = tagged_bundle
+            .contents
+            .get(1)
+            .ok_or("Missing actual packet")?
+            .clone();
+        if let OscPacket::Message(info_msg) = info_packet {
+            let timestamp = info_msg
+                .clone()
+                .args
+                .clone()
+                .get(0)
+                .ok_or("No info msg arg")?
+                .clone()
+                .time()
+                .ok_or("Malformed time arg")?;
+
+            let time =
+                SystemTime::try_from(timestamp).map_err(|_| "Malformed timestamp".to_string())?;
+
+            Ok(RealTimePacket {
+                packet: actual_packet,
+                time,
+            })
+        } else {
+            Err("Info message was a bundle".to_string())
+        }
+    }
+}
 
 // Initial structure below: (Note that we might want to expose other s_new args eventually)
 // ["/note_on_timed", "my_synth", "kb_my_synth_n33", 0.2, "arg1", 0.2, "arg2", 0.4, ...]

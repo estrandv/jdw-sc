@@ -111,24 +111,34 @@ impl SCClient {
        By providing a delay, we remove this variation via specifying the exact time of execution.
        This is important in precise sequencing but unimportant for direct human input.
     */
-    pub fn send_timed_packets_to_scsynth(&self, delay_ms: u64, msgs: Vec<TimedOSCPacket>) {
+    pub fn send_timed_packets_to_scsynth(
+        &self,
+        delay_ms: u64,
+        msgs: Vec<TimedOSCPacket>,
+        receive_time: SystemTime,
+    ) {
         for msg in msgs {
             if msg.time == BigDecimal::zero() {
-                self.send_to_scsynth_with_delay(msg.packet, delay_ms);
+                self.send_to_scsynth_with_delay(msg.packet, delay_ms, receive_time);
             } else {
                 // Tell supercollider to execute the message after a delay
                 let time_in_ms = BigDecimal::from_str("1000.00").unwrap() * msg.time.clone();
                 let time_integer = time_in_ms.to_u64().unwrap();
-                self.send_to_scsynth_with_delay(msg.packet, delay_ms + time_integer);
+                self.send_to_scsynth_with_delay(msg.packet, delay_ms + time_integer, receive_time);
             }
         }
     }
 
-    pub fn send_to_scsynth_with_delay(&self, msg: OscPacket, delay_ms: u64) {
+    pub fn send_to_scsynth_with_delay(
+        &self,
+        msg: OscPacket,
+        delay_ms: u64,
+        receive_time: SystemTime,
+    ) {
         // TODO: Trying out some latency adjustments to fix desync issues
         // This is not the optimal way - these operations are highly reliant on context
 
-        let target_time = SystemTime::now() + Duration::from_millis(delay_ms);
+        let target_time = receive_time + Duration::from_millis(delay_ms);
 
         use std::convert::TryFrom;
         let bundle = OscBundle {

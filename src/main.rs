@@ -11,7 +11,7 @@ use simple_logger::SimpleLogger;
 use std::process::exit;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 mod config;
 mod internal_osc_conversion;
@@ -106,7 +106,7 @@ fn main() {
 
     // Play a welcoming tune in a really obtuse way.
     for i in [130.81, 146.83, 196.00] {
-        client.send_timed_packets_to_scsynth(0, beep(i, node_reg.clone()));
+        client.send_timed_packets_to_scsynth(0, beep(i, node_reg.clone()), SystemTime::now());
         sleep(Duration::from_millis(125));
     }
 
