@@ -157,8 +157,9 @@ impl Interpreter {
                                 }
                             } else {
                                 warn!(
-                                    "Could not map suggested sample index to a loaded sample: {}.",
-                                    processed_message.index
+                                    "Could not map suggested sample index to a loaded sample: {}. Category: '{}'",
+                                    processed_message.index,
+                                    category
                                 );
                             }
                         }
@@ -190,7 +191,10 @@ impl Interpreter {
 
                         let sample = self.sample_pack_dict.register_sample(resolved).unwrap();
 
-                        info!("Sample registered with tone index {}", sample.tone_index);
+                        info!(
+                            "Sample {} registered with tone index {} and category '{}'",
+                            sample.file_path, sample.tone_index, sample.category_tag
+                        );
 
                         self.client.send_to_sclang(OscMessage {
                             addr: "/read_scd".to_string(),
