@@ -14,6 +14,7 @@ use log::{error, info, warn};
 use rosc::{OscMessage, OscPacket, OscTime, OscType};
 
 use crate::{
+    config,
     internal_osc_conversion::{self},
     node_lookup::NodeIDRegistry,
     nrt_record::NRTConvert,
@@ -53,7 +54,7 @@ impl Interpreter {
             nrt_synthdef_snippets: vec![sampler_snippet.clone()],
             sampler_synth_snippet: sampler_snippet,
             nrt_preloads: vec![],
-            bpm: 120,
+            bpm: config::Config::get().default_bpm,
         }
     }
 
@@ -377,7 +378,7 @@ impl Interpreter {
                                             match self.client.await_internal_response(
                                                 "/nrt_done",
                                                 vec![OscType::String("ok".to_string())],
-                                                Duration::from_secs(10),
+                                                Duration::from_secs(config::Config::get().nrt_done_timeout_secs),
                                             ) {
                                                 Err(e) => {
                                                     error!("Timed out waiting for NRT done {}", e);
@@ -433,7 +434,7 @@ pub fn run(host_url: String, client: SCClient, sampler_snippet: String) {
 
     let sock = UdpSocket::bind(addr).unwrap();
 
-    let mut buf = [0u8; 333072];
+    let mut buf = vec![0u8; config::Config::get().buffer_size];
 
     let mut interpreter = Interpreter::new(client, sampler_snippet);
 

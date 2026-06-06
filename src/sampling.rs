@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use log::info;
 
-use crate::config::SERVER_NAME;
+use crate::config;
 use crate::osc_model::LoadSampleMessage;
 
 #[derive(Debug, Clone)]
@@ -27,20 +27,21 @@ impl Sample {
     pub fn get_buffer_load_scd(&self) -> String {
         format!(
             "Buffer.read({}, \"{}\", 0, -1, bufnum: {}); \n",
-            SERVER_NAME,
-            self.file_path.to_string(),
+            config::Config::get().server_name,
+            self.file_path,
             self.buffer_number
         )
     }
 
     pub fn get_nrt_scd_row(&self) -> String {
-        let ret = format!(
-            "[0.0, (Buffer.new(server, 44100 * 8.0, 2, bufnum: {})).allocReadMsg(\"{}\")]",
+        let cfg = config::Config::get();
+        format!(
+            "[0.0, (Buffer.new(server, {}, {}, bufnum: {})).allocReadMsg(\"{}\")]",
+            cfg.sample_buffer_frames,
+            cfg.sample_channels,
             self.buffer_number,
-            self.file_path.to_string(),
-        );
-
-        ret
+            self.file_path,
+        )
     }
 }
 

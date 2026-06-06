@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use crate::config::{APPLICATION_IP, SERVER_IN_PORT, SERVER_NAME, SERVER_OSC_SOCKET_NAME, SERVER_OUT_PORT, SUPERCOLLIDER_MEMORY_BYTES};
+use crate::config;
 
 pub fn read_scd_file(template_name: &str) -> String {
 
@@ -18,6 +18,7 @@ pub fn create_nrt_script(
     end_time: f32,
     message_scd_rows: Vec<String>
 ) -> String {
+    let cfg = config::Config::get();
 
     let mut text = read_scd_file("nrt_record.scd.template");
 
@@ -27,20 +28,22 @@ pub fn create_nrt_script(
     text = text.replace("{:file_name}", file_name);
     text = text.replace("{:score_rows}", &score_row);
     text = text.replace("{:end_time}", &format!("{}", end_time));
-    text = text.replace("{:out_socket_name}", SERVER_OSC_SOCKET_NAME);
+    text = text.replace("{:out_socket_name}", &cfg.server_osc_socket_name);
 
     text
 
 }
 
 pub fn create_boot_script() -> Result<String, String> {
+    let cfg = config::Config::get();
+
     let mut text = read_scd_file("start_server.scd.template");
-    text = text.replace("{:server_out_port}", &SERVER_OUT_PORT.to_string());
-    text = text.replace("{:server_in_port}", &SERVER_IN_PORT.to_string());
-    text = text.replace("{:application_ip}", APPLICATION_IP);
-    text = text.replace("{:server_name}", SERVER_NAME);
-    text = text.replace("{:out_socket_name}", SERVER_OSC_SOCKET_NAME);
-    text = text.replace("{:memory_bytes}", &SUPERCOLLIDER_MEMORY_BYTES.to_string());
+    text = text.replace("{:server_out_port}", &cfg.server_out_port.to_string());
+    text = text.replace("{:server_in_port}", &cfg.server_in_port.to_string());
+    text = text.replace("{:application_ip}", &cfg.application_ip);
+    text = text.replace("{:server_name}", &cfg.server_name);
+    text = text.replace("{:out_socket_name}", &cfg.server_osc_socket_name);
+    text = text.replace("{:memory_bytes}", &cfg.supercollider_memory_bytes.to_string());
 
     return Ok(text);
 }

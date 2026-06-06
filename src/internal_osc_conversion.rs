@@ -1,3 +1,4 @@
+use crate::config;
 use crate::node_lookup::NodeIDRegistry;
 use crate::osc_model::{NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, PlaySampleMessage};
 use crate::sampling::SamplePackDict;
@@ -33,11 +34,12 @@ pub trait SuperColliderMessage {
 }
 
 fn create_s_new(node_id: i32, synth_name: &str, msg_args: &Vec<OscType>) -> TimedOSCPacket {
+    let cfg = config::Config::get();
     let mut final_args = vec![
         OscType::String(synth_name.to_string()),
-        OscType::Int(node_id), // NodeID
-        OscType::Int(0),       // Group?
-        OscType::Int(0),       // Group placement?
+        OscType::Int(node_id),
+        OscType::Int(cfg.group_id),
+        OscType::Int(cfg.group_placement),
     ];
 
     final_args.extend(msg_args.clone());

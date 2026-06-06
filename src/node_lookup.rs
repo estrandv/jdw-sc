@@ -9,6 +9,8 @@ use std::collections::HashMap;
 use log::{debug, warn};
 use regex::Regex;
 
+use crate::config;
+
 pub struct NodeIDRegistry {
     pub registry: RefCell<HashMap<String, i32>>,
     curr_id: RefCell<i32>,
@@ -18,7 +20,7 @@ impl NodeIDRegistry {
     pub fn new() -> NodeIDRegistry {
         NodeIDRegistry {
             registry: RefCell::new(HashMap::new()),
-            curr_id: RefCell::new(100),
+            curr_id: RefCell::new(config::Config::get().first_node_id),
         }
     }
 

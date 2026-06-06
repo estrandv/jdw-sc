@@ -1,7 +1,5 @@
-use crate::config::{
-    OUTGOING_PORT, SCLANG_IN_PORT, SC_SERVER_INCOMING_READ_TIMEOUT, SERVER_IN_PORT, SERVER_OUT_PORT,
-};
-use crate::{config, scd_templating};
+use crate::config;
+use crate::scd_templating;
 use bigdecimal::{BigDecimal, ToPrimitive, Zero};
 use jdw_osc_lib::model::TimedOSCPacket;
 use log::{debug, info};
@@ -24,30 +22,33 @@ pub fn init() -> Result<SCInitData, Box<dyn std::error::Error>> {
     // TODO: General temp folder management should be its own little util
     // TODO: ... and use home folder instead
 
+    let cfg = config::Config::get();
+
     info!("Generating boot script");
 
     let templated = scd_templating::create_boot_script()?;
 
     info!("Creating temp dir");
 
-    let temp_dir = Path::new("temp");
+    let temp_dir = Path::new(&cfg.temp_dir);
     if !temp_dir.exists() {
-        fs::create_dir(Path::new("temp"))?;
+        fs::create_dir(Path::new(&cfg.temp_dir))?;
     }
 
     info!("Creating server boot script temp file");
 
-    let mut file = File::create("temp/start_server.scd")?;
+    let script_path = format!("{}/start_server.scd", cfg.temp_dir);
+    let mut file = File::create(&script_path)?;
     file.write_all(templated.as_bytes())?;
 
     info!("Starting supercollider with generated boot script");
 
     let process = Popen::create(
         &[
-            "sclang",
-            "temp/start_server.scd",
+            cfg.sclang_binary.as_str(),
+            script_path.as_str(),
             "-u",
-            &SCLANG_IN_PORT.to_string(),
+            &cfg.sclang_in_port.to_string(),
         ],
         PopenConfig {
             stdout: Redirection::Merge,
@@ -58,24 +59,24 @@ pub fn init() -> Result<SCInitData, Box<dyn std::error::Error>> {
     // Note: this port is targeted by start_server.scd.template
     // Note: Technically the second UDP in socket managed by the application,
     // the other being the public in-port used to send messages to jdw-sc
-    let recv_addr = match SocketAddrV4::from_str(&config::get_addr(SERVER_OUT_PORT)) {
+    let recv_addr = match SocketAddrV4::from_str(&config::get_addr(cfg.server_out_port)) {
         Ok(addr) => addr,
         Err(_) => panic!("Error binding incoming osc address"),
     };
 
     let incoming_socket = UdpSocket::bind(recv_addr)?;
 
-    let scsynth_addr = match SocketAddrV4::from_str(&config::get_addr(SERVER_IN_PORT)) {
+    let scsynth_addr = match SocketAddrV4::from_str(&config::get_addr(cfg.server_in_port)) {
         Ok(addr) => addr,
         Err(_) => panic!("Error binding scsynth address"),
     };
 
-    let sclang_addr = match SocketAddrV4::from_str(&config::get_addr(SCLANG_IN_PORT)) {
+    let sclang_addr = match SocketAddrV4::from_str(&config::get_addr(cfg.sclang_in_port)) {
         Ok(addr) => addr,
         Err(_) => panic!("Error binding sclang address"),
     };
 
-    let out_addr = match SocketAddrV4::from_str(&config::get_addr(OUTGOING_PORT)) {
+    let out_addr = match SocketAddrV4::from_str(&config::get_addr(cfg.outgoing_port)) {
         Ok(addr) => addr,
         Err(_) => panic!("Error binding outgoing traffic address"),
     };
@@ -84,7 +85,7 @@ pub fn init() -> Result<SCInitData, Box<dyn std::error::Error>> {
     // Seems to also enable ctrl+c interrupt for some reason.
     incoming_socket
         .set_read_timeout(Option::Some(Duration::from_secs(
-            SC_SERVER_INCOMING_READ_TIMEOUT,
+            cfg.sc_server_incoming_read_timeout,
         )))
         .unwrap();
 
@@ -228,7 +229,9 @@ impl SCClient {
                 return Err(format!(">> Timed out waiting for {}", message_name));
             }
 
-            thread::sleep(Duration::from_millis(10));
+            thread::sleep(Duration::from_millis(
+                config::Config::get().poll_sleep_ms,
+            ));
         }
     }
 }

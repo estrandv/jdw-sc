@@ -24,13 +24,23 @@ mod sc_process_management;
 mod scd_templating;
 
 fn main() {
-    let quiet = std::env::args().any(|a| a == "-q" || a == "--quiet");
+    let args: Vec<String> = std::env::args().collect();
+    let quiet = args.iter().any(|a| a == "-q" || a == "--quiet");
+    let config_path = args
+        .iter()
+        .skip(1)
+        .skip_while(|a| a.starts_with('-'))
+        .next()
+        .map(|s| s.as_str())
+        .unwrap_or("config.toml");
+
+    config::init(config_path);
 
     SimpleLogger::new()
         .with_level(if quiet {
             log::LevelFilter::Error
         } else {
-            config::LOG_LEVEL
+            config::Config::get().log_level_filter()
         })
         .init()
         .unwrap();
@@ -68,7 +78,7 @@ fn main() {
     match client.await_internal_response(
         "/init",
         vec![OscType::String("ok".to_string())],
-        Duration::from_secs(10),
+        Duration::from_secs(config::Config::get().init_wait_timeout_secs),
     ) {
         Err(e) => {
             error!("{}", e);
@@ -80,7 +90,9 @@ fn main() {
     info!("Server online!");
 
     let mut sample_pack_dir = home_dir().unwrap();
-    sample_pack_dir.push("sample_packs");
+    sample_pack_dir.push(
+        config::Config::get().sample_pack_dir.trim_start_matches("~/"),
+    );
 
     let node_reg = Arc::new(Mutex::new(NodeIDRegistry::new()));
 
@@ -117,7 +129,7 @@ fn main() {
     info!("Startup completed, polling for messages ...");
 
     osc_daemon::run(
-        config::get_addr(config::APPLICATION_IN_PORT),
+        config::get_addr(config::Config::get().application_in_port),
         client,
         sampler_def,
     );
