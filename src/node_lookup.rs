@@ -33,7 +33,9 @@ impl NodeIDRegistry {
         let mut new_reg = self.registry.clone().into_inner();
 
         if !self.regex_search_node_ids(&with_id_fill).is_empty() {
-            return Result::Err("External id already taken".to_string());
+            let all_ids: Vec<String> = self.registry.borrow().keys().cloned().collect();
+            debug!("[jdw-sc] External id conflict: '{}' (with nodeId fill: '{}'). Currently registered ({} ids): {:?}", external_id, with_id_fill, all_ids.len(), all_ids);
+            return Result::Err(format!("External id already taken: {}", external_id));
         }
 
         new_reg.insert(with_id_fill.to_string(), node_id);

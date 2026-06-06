@@ -34,11 +34,15 @@ All custom messages are sent via OSC to jdw-sc's control port. Non-custom messag
 - `/load_scd` — string arg: [scd_source_code]
 - `/nrt_record` — float: [duration_ms], string: [output_path]
 
-## Node Registry
+## Node Registry (`node_lookup.rs`)
 
-- On `/note_on`, external_id + returned scsynth node_id are stored in a HashMap
-- `/note_modify` looks up external_id, retrieves node_id, sends `/n_set` to scsynth
-- On `/n_end` from scsynth, the entry is removed
+- On `/note_on_timed` / `/note_on` / `/play_sample`, external_id + assigned node_id are stored in `HashMap<String, i32>`
+- `/note_modify` does a regex match against external_ids, retrieves node_ids, sends `/n_set` to scsynth
+- `/free_notes` does a regex match, sends `/n_free` to scsynth for each match, AND removes entries from registry
+- **There is NO `/n_end` handler** — scsynth never notifies jdw-sc when a note ends. The `clear()` method exists but is `#[allow(dead_code)]` (never called).
+- **`{nodeId}` template**: if an external_id contains the literal string `{nodeId}`, it gets replaced with the assigned scsynth node_id before storage. This is the main uniqueness mechanism — since `curr_id` starts at 100 and monotonically increments, every `{nodeId}` substitution produces a globally unique value, even across loop boundaries.
+- `curr_id` starts at 100, increments by 1 per `create_node_id` call. Never resets.
+- **Bottom line**: external IDs must be unique per-call or the note is rejected. The `{nodeId}` template in Python's `ElementConverter` ensures this by embedding the unique scsynth node ID.
 
 ## Build & Run
 
