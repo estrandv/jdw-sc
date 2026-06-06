@@ -1,8 +1,11 @@
 use log::LevelFilter;
 use serde::Deserialize;
+use std::path::Path;
 use std::sync::OnceLock;
+use toml::Value as TomlValue;
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
+static APP_NAME: &str = "sc";
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -80,14 +83,100 @@ impl Config {
     }
 }
 
-pub fn load(path: &str) -> Config {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|contents| toml::from_str(&contents).ok())
-        .unwrap_or_else(|| {
-            eprintln!("No config at '{}', using defaults", path);
-            Config::default()
-        })
+fn central_config_path() -> Option<String> {
+    if let Ok(path) = std::env::var("JDW_CONFIG") {
+        if Path::new(&path).exists() {
+            return Some(path);
+        }
+    }
+    let home = std::env::var("HOME").ok()?;
+    let xdg = Path::new(&home).join(".config").join("jdw.toml");
+    if xdg.exists() {
+        return Some(xdg.to_string_lossy().to_string());
+    }
+    None
+}
+
+fn load_central_section() -> Option<TomlValue> {
+    let path = central_config_path()?;
+    let contents = std::fs::read_to_string(path).ok()?;
+    let root: TomlValue = contents.parse().ok()?;
+    root.get(APP_NAME).cloned()
+}
+
+fn merge_str(base: &mut String, overlay: &TomlValue, key: &str) {
+    if let Some(v) = overlay.get(key).and_then(|v| v.as_str()) {
+        *base = v.to_string();
+    }
+}
+
+fn merge_i32(base: &mut i32, overlay: &TomlValue, key: &str) {
+    if let Some(v) = overlay.get(key).and_then(|v| v.as_integer()) {
+        *base = v as i32;
+    }
+}
+
+fn merge_u64(base: &mut u64, overlay: &TomlValue, key: &str) {
+    if let Some(v) = overlay.get(key).and_then(|v| v.as_integer()) {
+        *base = v as u64;
+    }
+}
+
+fn merge_usize(base: &mut usize, overlay: &TomlValue, key: &str) {
+    if let Some(v) = overlay.get(key).and_then(|v| v.as_integer()) {
+        *base = v as usize;
+    }
+}
+
+fn merge_f64(base: &mut f64, overlay: &TomlValue, key: &str) {
+    if let Some(v) = overlay.get(key).and_then(|v| v.as_float()) {
+        *base = v;
+    }
+}
+
+fn merge_config(base: &mut Config, overlay: &TomlValue) {
+    merge_str(&mut base.application_ip, overlay, "application_ip");
+    merge_str(&mut base.server_osc_socket_name, overlay, "server_osc_socket_name");
+    merge_str(&mut base.server_name, overlay, "server_name");
+    merge_u64(&mut base.sc_server_incoming_read_timeout, overlay, "sc_server_incoming_read_timeout");
+    merge_i32(&mut base.server_out_port, overlay, "server_out_port");
+    merge_i32(&mut base.sclang_in_port, overlay, "sclang_in_port");
+    merge_i32(&mut base.server_in_port, overlay, "server_in_port");
+    merge_i32(&mut base.outgoing_port, overlay, "outgoing_port");
+    merge_i32(&mut base.application_in_port, overlay, "application_in_port");
+    merge_i32(&mut base.supercollider_memory_bytes, overlay, "supercollider_memory_bytes");
+    merge_str(&mut base.log_level, overlay, "log_level");
+    merge_u64(&mut base.init_wait_timeout_secs, overlay, "init_wait_timeout_secs");
+    merge_str(&mut base.sample_pack_dir, overlay, "sample_pack_dir");
+    merge_str(&mut base.temp_dir, overlay, "temp_dir");
+    merge_str(&mut base.sclang_binary, overlay, "sclang_binary");
+    merge_u64(&mut base.poll_sleep_ms, overlay, "poll_sleep_ms");
+    merge_i32(&mut base.default_bpm, overlay, "default_bpm");
+    merge_usize(&mut base.buffer_size, overlay, "buffer_size");
+    merge_u64(&mut base.nrt_done_timeout_secs, overlay, "nrt_done_timeout_secs");
+    merge_i32(&mut base.first_node_id, overlay, "first_node_id");
+    merge_f64(&mut base.sample_buffer_frames, overlay, "sample_buffer_frames");
+    merge_i32(&mut base.sample_channels, overlay, "sample_channels");
+    merge_i32(&mut base.group_id, overlay, "group_id");
+    merge_i32(&mut base.group_placement, overlay, "group_placement");
+}
+
+pub fn load(config_path: &str) -> Config {
+    let mut cfg = Config::default();
+
+    if let Some(central) = load_central_section() {
+        merge_config(&mut cfg, &central);
+    }
+
+    if let Ok(contents) = std::fs::read_to_string(config_path) {
+        if let Ok(local) = toml::from_str::<TomlValue>(&contents) {
+            merge_config(&mut cfg, &local);
+        }
+    } else {
+        eprintln!("Warning: Config file '{}' not found. Using defaults.", config_path);
+    }
+
+    cfg
 }
 
 pub fn init(path: &str) {

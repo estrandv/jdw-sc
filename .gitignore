@@ -2,3 +2,4 @@ target
 sample_packs
 .aider*
 target
+python/__pycache__/
