@@ -28,25 +28,24 @@ pub fn init() -> Result<SCInitData, Box<dyn std::error::Error>> {
 
     let templated = scd_templating::create_boot_script()?;
 
-    info!("Creating temp dir");
+    info!("Writing boot script to ~/.config/jdw-sc/");
 
-    let temp_dir = Path::new(&cfg.temp_dir);
-    if !temp_dir.exists() {
-        fs::create_dir(Path::new(&cfg.temp_dir))?;
+    let config_dir = home::home_dir()
+        .expect("Cannot determine home directory")
+        .join(".config")
+        .join("jdw-sc");
+    if !config_dir.exists() {
+        fs::create_dir_all(&config_dir)?;
     }
-
-    info!("Creating server boot script temp file");
-
-    let script_path = format!("{}/start_server.scd", cfg.temp_dir);
-    let mut file = File::create(&script_path)?;
-    file.write_all(templated.as_bytes())?;
+    let script_path = config_dir.join("start_server.scd");
+    fs::write(&script_path, templated.as_bytes())?;
 
     info!("Starting supercollider with generated boot script");
 
     let process = Popen::create(
         &[
             cfg.sclang_binary.as_str(),
-            script_path.as_str(),
+            script_path.to_str().unwrap(),
             "-u",
             &cfg.sclang_in_port.to_string(),
         ],

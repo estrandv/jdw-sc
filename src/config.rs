@@ -22,7 +22,7 @@ pub struct Config {
     pub log_level: String,
     pub init_wait_timeout_secs: u64,
     pub sample_pack_dir: String,
-    pub temp_dir: String,
+
     pub sclang_binary: String,
     pub poll_sleep_ms: u64,
     pub default_bpm: i32,
@@ -51,7 +51,7 @@ impl Default for Config {
             log_level: "debug".to_string(),
             init_wait_timeout_secs: 10,
             sample_pack_dir: "~/sample_packs".to_string(),
-            temp_dir: "temp".to_string(),
+
             sclang_binary: "sclang".to_string(),
             poll_sleep_ms: 10,
             default_bpm: 120,
@@ -152,7 +152,7 @@ fn merge_config(base: &mut Config, overlay: &TomlValue) {
     merge_str(&mut base.log_level, overlay, "log_level");
     merge_u64(&mut base.init_wait_timeout_secs, overlay, "init_wait_timeout_secs");
     merge_str(&mut base.sample_pack_dir, overlay, "sample_pack_dir");
-    merge_str(&mut base.temp_dir, overlay, "temp_dir");
+
     merge_str(&mut base.sclang_binary, overlay, "sclang_binary");
     merge_u64(&mut base.poll_sleep_ms, overlay, "poll_sleep_ms");
     merge_i32(&mut base.default_bpm, overlay, "default_bpm");
@@ -172,12 +172,14 @@ pub fn load(config_path: &str) -> Config {
         merge_config(&mut cfg, &central);
     }
 
-    if let Ok(contents) = std::fs::read_to_string(config_path) {
-        if let Ok(local) = toml::from_str::<TomlValue>(&contents) {
-            merge_config(&mut cfg, &local);
+    if !config_path.is_empty() {
+        if let Ok(contents) = std::fs::read_to_string(config_path) {
+            if let Ok(local) = toml::from_str::<TomlValue>(&contents) {
+                merge_config(&mut cfg, &local);
+            }
+        } else {
+            eprintln!("Warning: Config file '{}' not found. Using defaults.", config_path);
         }
-    } else {
-        eprintln!("Warning: Config file '{}' not found. Using defaults.", config_path);
     }
 
     cfg

@@ -1,22 +1,25 @@
-use std::fs;
-use std::path::Path;
-
 use crate::config;
 
+// Embed all SCD assets at compile time so the library works regardless of
+// the working directory at runtime.
+const START_SERVER_TEMPLATE: &str = include_str!("scd/start_server.scd.template");
+const NRT_RECORD_TEMPLATE: &str = include_str!("scd/nrt_record.scd.template");
+const SAMPLER_SCD: &str = include_str!("scd/sampler.scd");
+
 pub fn read_scd_file(template_name: &str) -> String {
-
-    let full_path = "src/scd/".to_string() + template_name;
-    let text = fs::read_to_string(Path::new(&full_path))
-        .map_err(|e| format!("Cannot find template script '{}' in source files: {}", full_path, e)).unwrap();
-
-    text
+    match template_name {
+        "start_server.scd.template" => START_SERVER_TEMPLATE.to_string(),
+        "nrt_record.scd.template"   => NRT_RECORD_TEMPLATE.to_string(),
+        "sampler.scd"               => SAMPLER_SCD.to_string(),
+        other => panic!("Unknown SCD asset requested: '{}'", other),
+    }
 }
 
 pub fn create_nrt_script(
     bpm: f32,
     file_name: &str,
     end_time: f32,
-    message_scd_rows: Vec<String>
+    message_scd_rows: Vec<String>,
 ) -> String {
     let cfg = config::Config::get();
 
@@ -31,7 +34,6 @@ pub fn create_nrt_script(
     text = text.replace("{:out_socket_name}", &cfg.server_osc_socket_name);
 
     text
-
 }
 
 pub fn create_boot_script() -> Result<String, String> {
@@ -45,13 +47,10 @@ pub fn create_boot_script() -> Result<String, String> {
     text = text.replace("{:out_socket_name}", &cfg.server_osc_socket_name);
     text = text.replace("{:memory_bytes}", &cfg.supercollider_memory_bytes.to_string());
 
-    return Ok(text);
+    Ok(text)
 }
 
 // Take synthdef code and wrap it in an nrt score line
 pub fn nrt_wrap_synthdef(def_code: &str) -> String {
-    // NOTE: Supercollider documentation recommends the writeDefFile method for larger
-    // synthDefs. Since we have no control over how large a synthDef any user can create,
-    // it is probably best long term to change the method into writing to temp synthDef files.
     format!("[0.0, ['/d_recv', {}]]", def_code)
 }
