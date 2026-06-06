@@ -24,9 +24,14 @@ mod sc_process_management;
 mod scd_templating;
 
 fn main() {
-    // Handles all log macros, e.g. "warn!()" to print info in terminal
+    let quiet = std::env::args().any(|a| a == "-q" || a == "--quiet");
+
     SimpleLogger::new()
-        .with_level(config::LOG_LEVEL)
+        .with_level(if quiet {
+            log::LevelFilter::Error
+        } else {
+            config::LOG_LEVEL
+        })
         .init()
         .unwrap();
 
@@ -104,7 +109,6 @@ fn main() {
         .as_osc(node_reg)
     }
 
-    // Play a welcoming tune in a really obtuse way.
     for i in [130.81, 146.83, 196.00] {
         client.send_timed_packets_to_scsynth(0, beep(i, node_reg.clone()), SystemTime::now());
         sleep(Duration::from_millis(125));

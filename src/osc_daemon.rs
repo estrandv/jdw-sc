@@ -111,7 +111,7 @@ impl Interpreter {
                                     sendTime,
                                 );
                             }
-                            Err(e) => println!("Can't create nodeId: {}", e),
+                            Err(e) => error!("Can't create nodeId: {}", e),
                         }
                     }
                     "/note_on" => {
@@ -125,7 +125,7 @@ impl Interpreter {
                                     sendTime,
                                 );
                             }
-                            Err(e) => println!("Can't create nodeId: {}", e),
+                            Err(e) => error!("Can't create nodeId: {}", e),
                         }
                     }
                     "/play_sample" => {
@@ -153,7 +153,7 @@ impl Interpreter {
                                             sendTime,
                                         );
                                     }
-                                    Err(e) => println!("Can't create nodeId: {}", e),
+                                    Err(e) => error!("Can't create nodeId: {}", e),
                                 }
                             } else {
                                 warn!(
@@ -268,7 +268,7 @@ impl Interpreter {
                                         .filter(|opt| opt.is_some())
                                         .map(Option::unwrap)
                                         .for_each(|packet| self.nrt_preloads.push(packet.clone()));
-                                    println!("Preloaded nrt packets: {}", self.nrt_preloads.len());
+                                    info!("Preloaded nrt packets: {}", self.nrt_preloads.len());
                                 }
                                 "nrt_record" => {
                                     match NRTRecordMessage::from_bundle(tagged_bundle) {
@@ -354,10 +354,10 @@ impl Interpreter {
                                             .unwrap();
                                             file.write_all(script.as_bytes()).unwrap();
 
-                                            println!(
-                                                "Saved NRT script as: {}",
-                                                &nrt_record_msg.file_name
-                                            );
+                                        info!(
+                                            "Saved NRT script as: {}",
+                                            &nrt_record_msg.file_name
+                                        );
 
                                             /*
                                                 NRT scripts are generally too large to send as an osc message,
