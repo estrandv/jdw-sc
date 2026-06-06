@@ -4,9 +4,10 @@ from pythonosc import udp_client
 from pythonosc import osc_bundle_builder
 from pythonosc import osc_message_builder
 import time
+import config
 
 # Hardcoded default port of jdw-sc main application
-client = udp_client.SimpleUDPClient("127.0.0.1", 13331) # Straight to main application
+client = udp_client.SimpleUDPClient(config.HOST, config.PORT) # Straight to main application
 
 # Create a synthdef to use
 with open("synths/example.scd", "r") as synthdef:

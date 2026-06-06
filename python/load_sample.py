@@ -1,10 +1,11 @@
 from pythonosc import udp_client
 import time
 import os
+import config
 
 wav_file = os.path.dirname(os.path.realpath(__file__)) + "/wav/snare.wav"
 
-client = udp_client.SimpleUDPClient("127.0.0.1", 13331) # Straight to main application
+client = udp_client.SimpleUDPClient(config.HOST, config.PORT) # Straight to main application
 
 # Or whatever your path is on this particular day ....
 client.send_message("/load_sample", [wav_file, "testsamples", 100, "bd", 0])

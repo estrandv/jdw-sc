@@ -1,11 +1,12 @@
 import time
 from pythonosc import udp_client
 import os
+import config
 
 wav_file = os.path.dirname(os.path.realpath(__file__)) + "/wav/snare.wav"
 
 # Hardcoded default port of jdw-sc main application
-client = udp_client.SimpleUDPClient("127.0.0.1", 13331) # Straight to main application
+client = udp_client.SimpleUDPClient(config.HOST, config.PORT) # Straight to main application
 
 # Ensure at least one sample exists
 client.send_message("/load_sample", [wav_file, "testsamples", 100, "", 0])

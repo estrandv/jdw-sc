@@ -2,9 +2,10 @@
 from pythonosc import udp_client
 from pythonosc import osc_bundle_builder
 from pythonosc import osc_message_builder
+import config
 
 # Hardcoded default port of jdw-sc main application
-client = udp_client.SimpleUDPClient("127.0.0.1", 13331)
+client = udp_client.SimpleUDPClient(config.HOST, config.PORT)
 
 # Construct a bundle containing:
 #   (a) nrt_record as /bundle_info message (tagged bundle)
