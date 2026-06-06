@@ -83,23 +83,27 @@ impl Config {
     }
 }
 
-fn central_config_path() -> Option<String> {
+fn central_config_path() -> String {
     if let Ok(path) = std::env::var("JDW_CONFIG") {
         if Path::new(&path).exists() {
-            return Some(path);
+            return path;
         }
     }
-    let home = std::env::var("HOME").ok()?;
-    let xdg = Path::new(&home).join(".config").join("jdw.toml");
-    if xdg.exists() {
-        return Some(xdg.to_string_lossy().to_string());
+    let home = std::env::var("HOME").ok();
+    if let Some(home) = home {
+        let xdg = Path::new(&home).join(".config").join("jdw.toml");
+        if xdg.exists() {
+            return xdg.to_string_lossy().to_string();
+        }
     }
-    None
+    eprintln!("Error: Central config not found at ~/.config/jdw.toml");
+    eprintln!("       Set $JDW_CONFIG to a custom path, or create the file.");
+    std::process::exit(1);
 }
 
 fn load_central_section() -> Option<TomlValue> {
-    let path = central_config_path()?;
-    let contents = std::fs::read_to_string(path).ok()?;
+    let path = central_config_path();
+    let contents = std::fs::read_to_string(&path).ok()?;
     let root: TomlValue = contents.parse().ok()?;
     root.get(APP_NAME).cloned()
 }
