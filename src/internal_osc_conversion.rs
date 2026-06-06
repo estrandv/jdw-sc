@@ -1,7 +1,7 @@
 use crate::node_lookup::NodeIDRegistry;
 use crate::osc_model::{NoteModifyMessage, NoteOnMessage, NoteOnTimedMessage, PlaySampleMessage};
 use crate::sampling::SamplePackDict;
-use bigdecimal::{BigDecimal, FromPrimitive};
+use bigdecimal::{BigDecimal, FromPrimitive, Zero};
 use jdw_osc_lib::model::TimedOSCPacket;
 use log::{info, warn};
 use rosc::{OscMessage, OscPacket, OscType};
@@ -50,7 +50,7 @@ fn create_s_new(node_id: i32, synth_name: &str, msg_args: &Vec<OscType>) -> Time
     let packet = OscPacket::Message(message.clone());
 
     TimedOSCPacket {
-        time: BigDecimal::from_str("0.0").unwrap(),
+        time: BigDecimal::zero(),
         packet,
     }
 }
@@ -154,7 +154,7 @@ impl NoteModifyMessage {
                 let packet = OscPacket::Message(message.clone());
 
                 TimedOSCPacket {
-                    time: BigDecimal::from_str("0.0").unwrap(),
+                    time: BigDecimal::zero(),
                     packet,
                 }
             })

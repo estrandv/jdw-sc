@@ -24,35 +24,28 @@ impl NodeIDRegistry {
 
     // Assign and return a new unique node_id for the given external_id
     pub fn create_node_id(&self, external_id: &str) -> Result<i32, String> {
-        let mut node_id = self.curr_id.clone().into_inner();
+        let mut node_id = *self.curr_id.borrow();
         node_id += 1;
         self.curr_id.replace(node_id);
 
-        let with_id_fill = external_id.replace("{nodeId}", &format!("{}", node_id));
+        let with_id_fill = external_id.replace("{nodeId}", &node_id.to_string());
 
-        let mut new_reg = self.registry.clone().into_inner();
-
-        if !self.regex_search_node_ids(&with_id_fill).is_empty() {
+        if self.registry.borrow().contains_key(&with_id_fill) {
             let all_ids: Vec<String> = self.registry.borrow().keys().cloned().collect();
             debug!("[jdw-sc] External id conflict: '{}' (with nodeId fill: '{}'). Currently registered ({} ids): {:?}", external_id, with_id_fill, all_ids.len(), all_ids);
-            return Result::Err(format!("External id already taken: {}", external_id));
+            return Err(format!("External id already taken: {}", external_id));
         }
 
-        new_reg.insert(with_id_fill.to_string(), node_id);
-        self.registry.replace(new_reg);
+        self.registry.borrow_mut().insert(with_id_fill, node_id);
 
-        Result::Ok(node_id)
+        Ok(node_id)
     }
 
     // Clear all node_ids matching regex
     pub fn regex_clear_node_ids(&self, external_id_regex: &str) {
-        let regex_attempt = Regex::new(external_id_regex);
-
-        match regex_attempt {
+        match Regex::new(external_id_regex) {
             Ok(regex) => {
-                let mut new_reg = self.registry.clone().into_inner();
-                new_reg.retain(|entry, _| !regex.is_match(&entry));
-                self.registry.replace(new_reg);
+                self.registry.borrow_mut().retain(|entry, _| !regex.is_match(entry));
             }
             Err(_) => {
                 warn!("Provided regex {} is invalid", external_id_regex);
@@ -92,10 +85,6 @@ impl NodeIDRegistry {
     // Remove an external_id's node_id from the registry, if present
     #[allow(dead_code)]
     pub fn clear(&self, external_id: String) {
-        if self.registry.borrow().contains_key(&external_id) {
-            let mut new_reg = self.registry.clone().into_inner();
-            new_reg.remove(&external_id);
-            self.registry.replace(new_reg);
-        }
+        self.registry.borrow_mut().remove(&external_id);
     }
 }
