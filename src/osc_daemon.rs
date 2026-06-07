@@ -349,10 +349,14 @@ impl Interpreter {
                                                 score_rows,
                                             );
 
-                                            let mut file = File::create(
-                                                &(nrt_record_msg.file_name.clone() + ".scd"),
-                                            )
-                                            .unwrap();
+                                            let scd_path = nrt_record_msg.file_name.clone() + ".scd";
+
+                                            // Ensure the output directory exists
+                                            if let Some(parent) = std::path::Path::new(&scd_path).parent() {
+                                                std::fs::create_dir_all(parent).ok();
+                                            }
+
+                                            let mut file = File::create(&scd_path).unwrap();
                                             file.write_all(script.as_bytes()).unwrap();
 
                                         info!(

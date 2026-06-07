@@ -288,6 +288,7 @@ pub fn resolve_msg(
         }
         "/note_on" => Some(Box::new(NoteOnMessage::new(&msg.clone()).unwrap())),
         "/note_modify" => Some(Box::new(NoteModifyMessage::new(&msg.clone()).unwrap())),
+        "/empty_message" | "/empty_msg" => None, // silence padding, no-op
         msgtype => {
             warn!("Unknown message type: {}", msgtype);
             None
