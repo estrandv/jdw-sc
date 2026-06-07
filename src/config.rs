@@ -56,7 +56,7 @@ impl Default for Config {
             poll_sleep_ms: 10,
             default_bpm: 120,
             buffer_size: 333072,
-            nrt_done_timeout_secs: 10,
+            nrt_done_timeout_secs: 120,
             first_node_id: 100,
             sample_buffer_frames: 44100.0 * 8.0,
             sample_channels: 2,
