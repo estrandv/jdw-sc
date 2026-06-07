@@ -181,7 +181,6 @@ impl SCClient {
         timeout: Duration,
     ) -> Result<(), String> {
         let start_time = Instant::now();
-
         let mut buf = [0u8; rosc::decoder::MTU];
 
         info!(
@@ -189,49 +188,42 @@ impl SCClient {
             message_name, args
         );
 
-        // Enable read timeout so recv_from unblocks periodically.
-        // Without this, recv_from blocks forever if no messages arrive.
+        // Temporarily set read timeout so recv_from unblocks periodically.
+        // Without this, recv_from blocks forever when no messages arrive.
         self.osc_socket.set_read_timeout(Some(Duration::from_secs(1))).ok();
 
-        loop {
+        let result = loop {
             match self.osc_socket.recv_from(&mut buf) {
                 Ok((size, _addr)) => {
                     let (_, packet) = rosc::decoder::decode_udp(&buf[..size]).unwrap();
-
                     match packet {
                         OscPacket::Message(msg) => {
                             if msg.addr == message_name && args == msg.args {
                                 info!(">> Awaited message received! Continuing ...");
-                                return Ok(());
+                                break Ok(());
                             } else {
-                                debug!(
-                                    "Received message not the waited for one, continuing wait..."
-                                );
+                                debug!("Received message not the waited for one, continuing wait...");
                             }
                         }
                         _ => {}
                     }
                 }
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => {
+                    // Read timeout — check elapsed time
+                }
                 Err(e) => {
-                    return Err(format!(">> Error receiving from socket: {}", e));
+                    break Err(format!(">> Error receiving from socket: {}", e));
                 }
             }
 
-            let elapsed = start_time.elapsed();
-
-            debug!(
-                "Elapsed: {:?}, timeout: {:?}",
-                elapsed.clone(),
-                timeout.clone()
-            );
-
-            if elapsed > timeout {
-                return Err(format!(">> Timed out waiting for {}", message_name));
+            if start_time.elapsed() > timeout {
+                break Err(format!(">> Timed out waiting for {}", message_name));
             }
+            thread::sleep(Duration::from_millis(config::Config::get().poll_sleep_ms));
+        };
 
-            thread::sleep(Duration::from_millis(
-                config::Config::get().poll_sleep_ms,
-            ));
-        }
+        // Restore blocking mode for the main receive loop
+        self.osc_socket.set_read_timeout(None).ok();
+        result
     }
 }
