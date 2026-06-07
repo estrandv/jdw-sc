@@ -189,10 +189,11 @@ impl SCClient {
             message_name, args
         );
 
+        // Enable read timeout so recv_from unblocks periodically.
+        // Without this, recv_from blocks forever if no messages arrive.
+        self.osc_socket.set_read_timeout(Some(Duration::from_secs(1))).ok();
+
         loop {
-            // TODO: Timeout does not work for recv_from - if no messages arrive at all it will forever-loop
-            //  The internal timeout arg only works for when other messages arrive consistently until timeout
-            //self.osc_socket.set_read_timeout(Some(Duration::from_secs(1))).unwrap()
             match self.osc_socket.recv_from(&mut buf) {
                 Ok((size, _addr)) => {
                     let (_, packet) = rosc::decoder::decode_udp(&buf[..size]).unwrap();
