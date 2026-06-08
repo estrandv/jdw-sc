@@ -99,7 +99,7 @@ impl Interpreter {
                         });
                     }
                     "/set_bpm" => {
-                        self.bpm = osc_message.get_float_at(0, "BPM value").unwrap() as i32;
+                        self.bpm = osc_message.get_int_at(0, "BPM value").unwrap();
                     }
                     "/note_on_timed" => {
                         let processed_message = NoteOnTimedMessage::new(&osc_message).unwrap();
