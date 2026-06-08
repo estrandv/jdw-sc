@@ -14,6 +14,7 @@ use crate::config;
 pub struct NodeIDRegistry {
     pub registry: RefCell<HashMap<String, i32>>,
     curr_id: RefCell<i32>,
+    regex_cache: RefCell<HashMap<String, Regex>>,
 }
 
 impl NodeIDRegistry {
@@ -21,6 +22,7 @@ impl NodeIDRegistry {
         NodeIDRegistry {
             registry: RefCell::new(HashMap::new()),
             curr_id: RefCell::new(config::Config::get().first_node_id),
+            regex_cache: RefCell::new(HashMap::new()),
         }
     }
 
@@ -44,22 +46,28 @@ impl NodeIDRegistry {
     }
 
     // Clear all node_ids matching regex
+    fn get_regex(&self, pattern: &str) -> Result<Regex, regex::Error> {
+        if let Some(cached) = self.regex_cache.borrow().get(pattern) {
+            return Ok(cached.clone());
+        }
+        let re = Regex::new(pattern)?;
+        self.regex_cache.borrow_mut().insert(pattern.to_string(), re.clone());
+        Ok(re)
+    }
+
     pub fn regex_clear_node_ids(&self, external_id_regex: &str) {
-        match Regex::new(external_id_regex) {
+        match self.get_regex(external_id_regex) {
             Ok(regex) => {
                 self.registry.borrow_mut().retain(|entry, _| !regex.is_match(entry));
             }
             Err(_) => {
-                warn!("Provided regex {} is invalid", external_id_regex);
+                warn!("Invalid regex: {}", external_id_regex);
             }
         }
     }
 
-    // Get all node_ids matching regex
     pub fn regex_search_node_ids(&self, external_id_regex: &str) -> Vec<i32> {
-        let regex_attempt = Regex::new(external_id_regex);
-
-        match regex_attempt {
+        match self.get_regex(external_id_regex) {
             Ok(regex) => {
                 let matching: Vec<_> = self
                     .registry

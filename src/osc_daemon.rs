@@ -443,14 +443,6 @@ pub fn run(host_url: String, client: SCClient, sampler_snippet: String) {
     let mut interpreter = Interpreter::new(client, sampler_snippet);
 
     loop {
-        //let buf = [0u8; rosc::decoder::MTU];
-        // TODO: Compare with size in struct declaration (should be same value)
-        // THe MTU constant is way too low... I think.
-        // Too low results in parts of large packets being dropped before receiving
-        // Heck, might just be some kind of buffer thing where I'm supposed to read
-        // multiple things but only end up reading the first.. .
-        // UPDATE: Found no indication of this in documentation. :c
-
         match sock.recv_from(&mut buf) {
             Ok((size, _)) => {
                 let (_rem, packet) = rosc::decoder::decode_udp(&buf[..size]).unwrap();
